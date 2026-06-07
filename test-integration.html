@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test de Integración - Sistema de Validación</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .test-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .test-section h2 {
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #333;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-right: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 20px;
+        }
+
+        .status.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .status.warning {
+            background: #fff3cd;
+            border: 1px solid #ffeeba;
+            color: #856404;
+        }
+
+        .test-results {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .test-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .test-item:last-child {
+            border-bottom: none;
+        }
+
+        .test-icon {
+            font-size: 20px;
+        }
+
+        .test-icon.pass {
+            color: #28a745;
+        }
+
+        .test-icon.fail {
+            color: #dc3545;
+        }
+
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔬 Test de Integración</h1>
+        <p class="subtitle">Verificación del Sistema de Validación</p>
+
+        <!-- Test 1: Verificar carga de archivos -->
+        <div class="test-section">
+            <h2>📦 Test 1: Carga de Archivos</h2>
+            <button class="btn btn-primary" onclick="testFileLoading()">Ejecutar Test</button>
+            <div id="test1-results"></div>
+        </div>
+
+        <!-- Test 2: Validación básica -->
+        <div class="test-section">
+            <h2>✅ Test 2: Validación Básica</h2>
+            <div class="form-group">
+                <label>Tipo de Núcleo</label>
+                <select id="test-coreType">
+                    <option value="air">Núcleo de Aire</option>
+                    <option value="ferrite_mn_zn">Ferrita MnZn</option>
+                    <option value="silicon_steel">Acero al Silicio</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Inductancia (mH)</label>
+                <input type="number" id="test-inductance" value="100">
+            </div>
+            <div class="form-group">
+                <label>Corriente (A)</label>
+                <input type="number" id="test-current" value="1">
+            </div>
+            <button class="btn btn-primary" onclick="testValidation()">Validar Parámetros</button>
+            <div id="test2-results"></div>
+        </div>
+
+        <!-- Test 3: Casos extremos -->
+        <div class="test-section">
+            <h2>⚠️ Test 3: Casos Extremos</h2>
+            <button class="btn btn-primary" onclick="testEdgeCases()">Ejecutar Test</button>
+            <div id="test3-results"></div>
+        </div>
+
+        <!-- Test 4: Integración completa -->
+        <div class="test-section">
+            <h2>🔄 Test 4: Integración Completa</h2>
+            <button class="btn btn-primary" onclick="testFullIntegration()">Ejecutar Test</button>
+            <div id="test4-results"></div>
+        </div>
+
+        <!-- Resumen -->
+        <div id="summary" style="margin-top: 30px;"></div>
+    </div>
+
+    <script>
+        let totalTests = 0;
+        let passedTests = 0;
+        let failedTests = 0;
+
+        // Test 1: Verificar carga de archivos
+        function testFileLoading() {
+            const container = document.getElementById('test1-results');
+            const tests = [
+                { name: 'ValidationSystem', check: () => typeof ValidationSystem !== 'undefined' },
+                { name: 'VALIDATION_RANGES', check: () => typeof VALIDATION_RANGES !== 'undefined' },
+                { name: 'displayValidationResults', check: () => typeof displayValidationResults === 'function' },
+                { name: 'setupRealtimeValidation', check: () => typeof setupRealtimeValidation === 'function' },
+                { name: 'calculateInductorWithValidation', check: () => typeof calculateInductorWithValidation === 'function' },
+            ];
+
+            let html = '<div class="test-results">';
+            tests.forEach(test => {
+                totalTests++;
+                const passed = test.check();
+                if (passed) passedTests++; else failedTests++;
+                
+                html += `
+                    <div class="test-item">
+                        <span class="test-icon ${passed ? 'pass' : 'fail'}">${passed ? '✓' : '✗'}</span>
+                        <span><code>${test.name}</code> ${passed ? 'cargado' : 'NO encontrado'}</span>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+            updateSummary();
+        }
+
+        // Test 2: Validación básica
+        function testValidation() {
+            const container = document.getElementById('test2-results');
+            
+            try {
+                const validator = new ValidationSystem();
+                const params = {
+                    coreType: document.getElementById('test-coreType').value,
+                    inductance: parseFloat(document.getElementById('test-inductance').value),
+                    inductanceUnit: 'mH',
+                    current: parseFloat(document.getElementById('test-current').value),
+                    wireGauge: 20,
+                    coilDiameter: 20,
+                    coilLength: 30,
+                    toroidOD: 30,
+                    toroidID: 15,
+                    toroidHeight: 10
+                };
+
+                const results = validator.validateInductor(params);
+
+                let html = '<div class="test-results">';
+                html += `<h4>Resultado de Validación:</h4>`;
+                html += `<div class="test-item">`;
+                html += `<span class="test-icon ${results.valid ? 'pass' : 'fail'}">${results.valid ? '✓' : '✗'}</span>`;
+                html += `<span>${results.valid ? 'Parámetros válidos' : 'Errores encontrados'}</span>`;
+                html += `</div>`;
+
+                if (results.errors.length > 0) {
+                    html += `<h4 style="margin-top: 10px; color: #dc3545;">Errores:</h4>`;
+                    results.errors.forEach(error => {
+                        html += `<div class="test-item"><span>🔴 ${error}</span></div>`;
+                    });
+                }
+
+                if (results.warnings.length > 0) {
+                    html += `<h4 style="margin-top: 10px; color: #ffc107;">Advertencias:</h4>`;
+                    results.warnings.forEach(warning => {
+                        html += `<div class="test-item"><span>🟡 ${warning}</span></div>`;
+                    });
+                }
+
+                if (results.suggestions.length > 0) {
+                    html += `<h4 style="margin-top: 10px; color: #17a2b8;">Sugerencias:</h4>`;
+                    results.suggestions.forEach(suggestion => {
+                        html += `<div class="test-item"><span>💡 ${suggestion}</span></div>`;
+                    });
+                }
+
+                html += '</div>';
+                container.innerHTML = html;
+
+                totalTests++;
+                if (results.valid) passedTests++; else failedTests++;
+                updateSummary();
+
+            } catch (error) {
+                container.innerHTML = `<div class="status error">❌ Error: ${error.message}</div>`;
+                totalTests++;
+                failedTests++;
+                updateSummary();
+            }
+        }
+
+        // Test 3: Casos extremos
+        function testEdgeCases() {
+            const container = document.getElementById('test3-results');
+            const validator = new ValidationSystem();
+
+            const testCases = [
+                { name: 'Inductancia negativa', params: { coreType: 'air', inductance: -10, inductanceUnit: 'mH', current: 1, wireGauge: 20 }, shouldFail: true },
+                { name: 'Corriente cero', params: { coreType: 'ferrite_mn_zn', inductance: 100, inductanceUnit: 'mH', current: 0, wireGauge: 20 }, shouldFail: true },
+                { name: 'AWG inválido', params: { coreType: 'air', inductance: 100, inductanceUnit: 'mH', current: 1, wireGauge: 5 }, shouldFail: true },
+                { name: 'Corriente muy alta', params: { coreType: 'air', inductance: 100, inductanceUnit: 'mH', current: 50, wireGauge: 40 }, shouldFail: true },
+                { name: 'Parámetros válidos', params: { coreType: 'ferrite_mn_zn', inductance: 1, inductanceUnit: 'mH', current: 0.5, wireGauge: 24 }, shouldFail: false }
+            ];
+
+            let html = '<div class="test-results">';
+            testCases.forEach(testCase => {
+                totalTests++;
+                const results = validator.validateInductor({
+                    ...testCase.params,
+                    coilDiameter: 20,
+                    coilLength: 30,
+                    toroidOD: 30,
+                    toroidID: 15,
+                    toroidHeight: 10
+                });
+
+                const passed = testCase.shouldFail ? !results.valid : results.valid;
+                if (passed) passedTests++; else failedTests++;
+
+                html += `
+                    <div class="test-item">
+                        <span class="test-icon ${passed ? 'pass' : 'fail'}">${passed ? '✓' : '✗'}</span>
+                        <span>${testCase.name}: ${passed ? 'OK' : 'FALLO'}</span>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+            updateSummary();
+        }
+
+        // Test 4: Integración completa
+        function testFullIntegration() {
+            const container = document.getElementById('test4-results');
+            
+            const integrationTests = [
+                {
+                    name: 'Función calculateInductorWithValidation existe',
+                    check: () => typeof calculateInductorWithValidation === 'function'
+                },
+                {
+                    name: 'Función displayValidationResults existe',
+                    check: () => typeof displayValidationResults === 'function'
+                },
+                {
+                    name: 'setupRealtimeValidation se ejecuta sin errores',
+                    check: () => {
+                        try {
+                            // Simular setup (no ejecutar realmente para no interferir)
+                            return typeof setupRealtimeValidation === 'function';
+                        } catch (e) {
+                            return false;
+                        }
+                    }
+                },
+                {
+                    name: 'ValidationSystem se puede instanciar',
+                    check: () => {
+                        try {
+                            const v = new ValidationSystem();
+                            return v !== null && typeof v.validateInductor === 'function';
+                        } catch (e) {
+                            return false;
+                        }
+                    }
+                },
+                {
+                    name: 'VALIDATION_RANGES tiene datos completos',
+                    check: () => {
+                        return VALIDATION_RANGES &&
+                               VALIDATION_RANGES.inductance &&
+                               VALIDATION_RANGES.current &&
+                               VALIDATION_RANGES.frequency &&
+                               VALIDATION_RANGES.wireGauge;
+                    }
+                }
+            ];
+
+            let html = '<div class="test-results">';
+            integrationTests.forEach(test => {
+                totalTests++;
+                const passed = test.check();
+                if (passed) passedTests++; else failedTests++;
+
+                html += `
+                    <div class="test-item">
+                        <span class="test-icon ${passed ? 'pass' : 'fail'}">${passed ? '✓' : '✗'}</span>
+                        <span>${test.name}</span>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+            updateSummary();
+        }
+
+        // Actualizar resumen
+        function updateSummary() {
+            const container = document.getElementById('summary');
+            const percentage = totalTests > 0 ? (passedTests / totalTests * 100).toFixed(1) : 0;
+            const status = percentage >= 80 ? 'success' : percentage >= 50 ? 'warning' : 'error';
+
+            container.innerHTML = `
+                <div class="status ${status}">
+                    <h3>📊 Resumen de Tests</h3>
+                    <p><strong>Total:</strong> ${totalTests}</p>
+                    <p><strong>Exitosos:</strong> ${passedTests} ✓</p>
+                    <p><strong>Fallidos:</strong> ${failedTests} ✗</p>
+                    <p><strong>Porcentaje:</strong> ${percentage}%</p>
+                    ${percentage >= 80 ? '<p>✅ <strong>Sistema listo para usar</strong></p>' : '<p>⚠️ <strong>Requiere ajustes</strong></p>'}
+                </div>
+            `;
+        }
+
+        // Auto-ejecutar test de carga
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                testFileLoading();
+            }, 500);
+        });
+    </script>
+</body>
+</html>

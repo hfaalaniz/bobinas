@@ -1,0 +1,241 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rebobinado de Transformadores — Suite Magnética</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles_validation.css">
+    <link rel="stylesheet" href="styles_additional.css">
+    <link rel="stylesheet" href="styles_modules.css">
+    <style>
+        .page-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px 24px;
+            background: rgba(0,0,0,0.3);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #94a3b8;
+            text-decoration: none;
+            font-size: 14px;
+            padding: 8px 14px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.12);
+            transition: all .2s;
+        }
+        .back-btn:hover { color: #f1f5f9; background: rgba(255,255,255,0.08); }
+        .page-title { font-size: 1.1rem; font-weight: 700; color: #f1f5f9; }
+        .page-subtitle { font-size: 0.8rem; color: #64748b; }
+        .secondary-row { margin-bottom: 12px; padding: 12px; background: rgba(255,255,255,0.04); border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); }
+        .secondary-row-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: 600; color: #94a3b8; font-size: 13px; }
+        .sec-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .btn-remove-sec { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #f87171; border-radius: 6px; padding: 3px 10px; cursor: pointer; font-size: 12px; }
+        .btn-remove-sec:hover { background: rgba(239,68,68,0.25); }
+        .btn-add-output { width: 100%; background: rgba(102,126,234,0.1); border: 1px dashed rgba(102,126,234,0.4); color: #818cf8; border-radius: 8px; padding: 10px; cursor: pointer; font-size: 13px; margin-top: 8px; }
+        .btn-add-output:hover { background: rgba(102,126,234,0.2); }
+        .btn-add-output:disabled { opacity: 0.4; cursor: default; }
+    </style>
+</head>
+<body>
+
+<div class="page-header">
+    <a href="index.html" class="back-btn">← Inicio</a>
+    <div>
+        <div class="page-title">🔧 Rebobinado de Transformadores de Red</div>
+        <div class="page-subtitle">50/60 Hz · Hasta 5 secundarios · Instrucciones paso a paso</div>
+    </div>
+</div>
+
+<div class="page active" id="page-rewind">
+    <div class="main-layout">
+        <aside class="panel">
+            <div class="panel-header">
+                <h2>⚙️ Parámetros de Rebobinado</h2>
+            </div>
+
+            <div class="form-group">
+                <label for="rwMode">Modo de Diseño:</label>
+                <select id="rwMode" onchange="rwToggleMode()">
+                    <option value="new">Nuevo diseño (calcular V/vuelta)</option>
+                    <option value="rewind">Rebobinar existente (medir V/vuelta)</option>
+                </select>
+            </div>
+
+            <!-- Campos solo para modo rebobinar -->
+            <div id="rwRebobinarFields" style="display:none;">
+                <div class="form-group">
+                    <label for="rwOriginalV">Voltaje Primario Original (V):</label>
+                    <input type="number" id="rwOriginalV" value="220" min="1" step="1">
+                </div>
+                <div class="form-group">
+                    <label for="rwOriginalN">Vueltas Primarias Originales:</label>
+                    <input type="number" id="rwOriginalN" value="1000" min="1" step="1">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="rwCoreType">Material del Núcleo:</label>
+                <select id="rwCoreType">
+                    <option value="silicon_steel" selected>Acero Silicio (laminado)</option>
+                    <option value="grain_oriented">Acero Grano Orientado</option>
+                    <option value="nanocrystalline">Nanocristalino</option>
+                    <option value="amorphous">Amorfo metálico</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="rwFreq">Frecuencia de Red (Hz):</label>
+                <select id="rwFreq">
+                    <option value="50" selected>50 Hz (Europa, Asia, Argentina)</option>
+                    <option value="60">60 Hz (EE.UU., Canadá, México)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="rwVprimary">Voltaje Primario (V):</label>
+                <input type="number" id="rwVprimary" value="220" min="1" step="1">
+            </div>
+
+            <div class="form-group">
+                <label for="rwAe">Sección Transversal del Núcleo Ae (cm²):</label>
+                <input type="number" id="rwAe" value="4" min="0.1" step="0.1">
+            </div>
+
+            <div class="form-group">
+                <label for="rwWindowArea">Área de Ventana Aw (cm²):</label>
+                <input type="number" id="rwWindowArea" value="6" min="0.1" step="0.1">
+            </div>
+
+            <!-- Secundarios dinámicos -->
+            <div style="margin-top:16px;">
+                <div style="font-size:13px;font-weight:600;color:#94a3b8;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;">Secundarios</div>
+
+                <div class="secondary-row" id="rwSec1">
+                    <div class="secondary-row-header">
+                        <span style="color:#667eea;">Secundario 1</span>
+                    </div>
+                    <div class="sec-inputs">
+                        <div class="form-group" style="margin:0">
+                            <label style="font-size:11px;">Voltaje (V)</label>
+                            <input type="number" id="rwVsec1V" value="12" min="0.1" step="0.1">
+                        </div>
+                        <div class="form-group" style="margin:0">
+                            <label style="font-size:11px;">Potencia (VA)</label>
+                            <input type="number" id="rwVsec1P" value="50" min="0.1" step="1">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="secondary-row" id="rwSec2" style="display:none;">
+                    <div class="secondary-row-header">
+                        <span style="color:#10b981;">Secundario 2</span>
+                        <button class="btn-remove-sec" onclick="rwRemoveSecondary(2)">✕ Quitar</button>
+                    </div>
+                    <div class="sec-inputs">
+                        <div class="form-group" style="margin:0">
+                            <label style="font-size:11px;">Voltaje (V)</label>
+                            <input type="number" id="rwVsec2V" placeholder="ej: 5" min="0.1" step="0.1">
+                        </div>
+                        <div class="form-group" style="margin:0">
+                            <label style="font-size:11px;">Potencia (VA)</label>
+                            <input type="number" id="rwVsec2P" placeholder="ej: 25" min="0.1" step="1">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="secondary-row" id="rwSec3" style="display:none;">
+                    <div class="secondary-row-header">
+                        <span style="color:#f59e0b;">Secundario 3</span>
+                        <button class="btn-remove-sec" onclick="rwRemoveSecondary(3)">✕ Quitar</button>
+                    </div>
+                    <div class="sec-inputs">
+                        <div class="form-group" style="margin:0">
+                            <label style="font-size:11px;">Voltaje (V)</label>
+                            <input type="number" id="rwVsec3V" placeholder="ej: 24" min="0.1" step="0.1">
+                        </div>
+                        <div class="form-group" style="margin:0">
+                            <label style="font-size:11px;">Potencia (VA)</label>
+                            <input type="number" id="rwVsec3P" placeholder="ej: 30" min="0.1" step="1">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="secondary-row" id="rwSec4" style="display:none;">
+                    <div class="secondary-row-header">
+                        <span style="color:#ef4444;">Secundario 4</span>
+                        <button class="btn-remove-sec" onclick="rwRemoveSecondary(4)">✕ Quitar</button>
+                    </div>
+                    <div class="sec-inputs">
+                        <div class="form-group" style="margin:0">
+                            <label style="font-size:11px;">Voltaje (V)</label>
+                            <input type="number" id="rwVsec4V" placeholder="ej: 15" min="0.1" step="0.1">
+                        </div>
+                        <div class="form-group" style="margin:0">
+                            <label style="font-size:11px;">Potencia (VA)</label>
+                            <input type="number" id="rwVsec4P" placeholder="ej: 20" min="0.1" step="1">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="secondary-row" id="rwSec5" style="display:none;">
+                    <div class="secondary-row-header">
+                        <span style="color:#8b5cf6;">Secundario 5</span>
+                        <button class="btn-remove-sec" onclick="rwRemoveSecondary(5)">✕ Quitar</button>
+                    </div>
+                    <div class="sec-inputs">
+                        <div class="form-group" style="margin:0">
+                            <label style="font-size:11px;">Voltaje (V)</label>
+                            <input type="number" id="rwVsec5V" placeholder="ej: 9" min="0.1" step="0.1">
+                        </div>
+                        <div class="form-group" style="margin:0">
+                            <label style="font-size:11px;">Potencia (VA)</label>
+                            <input type="number" id="rwVsec5P" placeholder="ej: 15" min="0.1" step="1">
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn-add-output" id="rwAddSecBtn" onclick="rwAddSecondary()">
+                    + Agregar Secundario
+                </button>
+            </div>
+
+            <button class="btn-primary" onclick="calculateRewind()" style="margin-top:16px;">
+                🔧 Calcular Rebobinado
+            </button>
+            <a href="exportar.html" class="btn-secondary" style="display:block;margin-top:8px;text-align:center;text-decoration:none;padding:10px;">
+                💾 Ver diseños guardados
+            </a>
+        </aside>
+
+        <main class="results-area">
+            <div class="results-header">
+                <h2>📊 Resultados del Rebobinado</h2>
+            </div>
+            <div id="rwResults" class="result-container">
+                <p class="placeholder-text">Configure los parámetros y presione "Calcular Rebobinado"</p>
+            </div>
+            <div class="canvas-container" style="margin-top:20px;">
+                <h3>Sección Transversal — Capas de Bobinado</h3>
+                <canvas id="rwCanvas"></canvas>
+            </div>
+        </main>
+    </div>
+</div>
+
+<script src="dialog.js" defer></script>
+<script src="data.js" defer></script>
+<script src="calculations.js" defer></script>
+<script src="val.js" defer></script>
+<script src="graphics.js" defer></script>
+<script src="rewind.js" defer></script>
+<script src="export.js" defer></script>
+<script src="main.js" defer></script>
+</body>
+</html>
+

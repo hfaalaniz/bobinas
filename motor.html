@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rebobinado de Motores — Suite Magnética</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles_validation.css">
+    <link rel="stylesheet" href="styles_additional.css">
+    <link rel="stylesheet" href="styles_modules.css">
+    <style>
+        /* ── PAGE HEADER ── */
+        .page-header {
+            display: flex; align-items: center; gap: 16px;
+            padding: 16px 24px;
+            background: rgba(0,0,0,0.3);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .back-btn {
+            display: flex; align-items: center; gap: 8px;
+            color: #94a3b8; text-decoration: none; font-size: 14px;
+            padding: 8px 14px; border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.12); transition: all .2s;
+        }
+        .back-btn:hover { color: #f1f5f9; background: rgba(255,255,255,0.08); }
+        .page-title { font-size: 1.1rem; font-weight: 700; color: #f1f5f9; }
+        .page-subtitle { font-size: 0.8rem; color: #64748b; }
+
+        /* ── SECTION LABELS ── */
+        .panel-section-label {
+            font-size: 10px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 1px; color: #0891b2;
+            margin: 18px 0 10px; padding-bottom: 6px;
+            border-bottom: 1px solid rgba(8,145,178,0.25);
+        }
+
+        /* ── TIPO DE MOTOR TOGGLE ── */
+        .motor-type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+        .mtype-btn {
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px; padding: 12px 8px; cursor: pointer;
+            text-align: center; font-size: 13px; font-weight: 600;
+            color: #94a3b8; transition: all .2s;
+        }
+        .mtype-btn .mtype-icon { display: block; font-size: 22px; margin-bottom: 4px; }
+        .mtype-btn.active { border-color: rgba(8,145,178,0.6); background: rgba(8,145,178,0.15); color: #22d3ee; }
+        .mtype-btn:hover:not(.active) { background: rgba(255,255,255,0.09); color: #e2e8f0; }
+
+        /* ── CLASE AISLAMIENTO ── */
+        .ins-class-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; margin-bottom: 12px; }
+        .ins-btn {
+            border: 1px solid rgba(255,255,255,0.10);
+            background: rgba(255,255,255,0.04);
+            border-radius: 7px; padding: 7px 4px; cursor: pointer;
+            text-align: center; font-size: 11px; font-weight: 700;
+            color: #64748b; transition: all .15s;
+        }
+        .ins-btn.active { color: #fff; }
+        .ins-btn.ins-A.active { background: rgba(16,185,129,0.3); border-color: #10b981; }
+        .ins-btn.ins-B.active { background: rgba(59,130,246,0.3); border-color: #3b82f6; }
+        .ins-btn.ins-F.active { background: rgba(245,158,11,0.3); border-color: #f59e0b; }
+        .ins-btn.ins-H.active { background: rgba(239,68,68,0.3);  border-color: #ef4444; }
+
+        /* ── HP/KW DUAL INPUT ── */
+        .power-dual { display: grid; grid-template-columns: 1fr auto 1fr; gap: 6px; align-items: end; }
+        .power-dual-sep { color: #475569; text-align: center; font-size: 12px; padding-bottom: 10px; }
+
+        /* ── PASO DE BOBINA ── */
+        .pitch-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+        .pitch-btn {
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(255,255,255,0.04);
+            border-radius: 8px; padding: 8px 6px; cursor: pointer;
+            text-align: center; font-size: 12px; font-weight: 600;
+            color: #94a3b8; transition: all .2s;
+        }
+        .pitch-btn.active { border-color: rgba(8,145,178,0.5); background: rgba(8,145,178,0.12); color: #67e8f9; }
+
+        /* ── TIPO DE RANURA ── */
+        .slot-type-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; margin-bottom: 12px; }
+        .stype-btn {
+            border: 1px solid rgba(255,255,255,0.10);
+            background: rgba(255,255,255,0.04);
+            border-radius: 8px; padding: 8px 4px; cursor: pointer;
+            text-align: center; font-size: 11px; font-weight: 600;
+            color: #64748b; transition: all .15s; line-height: 1.3;
+        }
+        .stype-btn .stype-icon { display: block; font-size: 18px; margin-bottom: 3px; }
+        .stype-btn.active { border-color: rgba(8,145,178,0.5); background: rgba(8,145,178,0.12); color: #67e8f9; }
+        .stype-btn:hover:not(.active) { background: rgba(255,255,255,0.08); color: #e2e8f0; }
+
+        /* ── CAMPO INLINE CON BOTÓN AUTO ── */
+        .input-with-btn { display: flex; gap: 6px; align-items: flex-end; }
+        .input-with-btn input { flex: 1; min-width: 0; }
+        .btn-auto-small {
+            flex-shrink: 0; padding: 9px 10px; font-size: 11px; font-weight: 600;
+            background: rgba(8,145,178,0.15); border: 1px solid rgba(8,145,178,0.4);
+            color: #22d3ee; border-radius: 8px; cursor: pointer; white-space: nowrap;
+            transition: all .15s;
+        }
+        .btn-auto-small:hover { background: rgba(8,145,178,0.25); }
+
+        /* ── DIAGRAMA SVG DE RANURA ── */
+        .slot-diagram-wrap {
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 10px; padding: 12px; margin-bottom: 12px; text-align: center;
+        }
+        .slot-diagram-wrap svg { max-width: 100%; height: auto; }
+        .slot-diagram-label { font-size: 10px; color: #64748b; margin-top: 6px; }
+
+        /* ── CUADRÍCULA 2 COLUMNAS ── */
+        .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .form-grid-2 .form-group { margin: 0; }
+
+        /* ── BADGE CALCULADO ── */
+        .calc-badge {
+            display: inline-block; font-size: 10px; font-weight: 700;
+            background: rgba(34,211,238,0.12); border: 1px solid rgba(34,211,238,0.25);
+            color: #22d3ee; border-radius: 5px; padding: 2px 7px; margin-left: 6px;
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body>
+
+<div class="page-header">
+    <a href="index.html" class="back-btn">← Inicio</a>
+    <div>
+        <div class="page-title">⚙️ Rebobinado de Motores de Inducción</div>
+        <div class="page-subtitle" id="motorPageSubtitle">Trifásico / Monofásico · Hasta 50 HP · Geometría completa del estátor</div>
+    </div>
+</div>
+
+<div class="page active" id="page-motor">
+<div class="main-layout">
+
+<!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
+<aside class="panel">
+    <div class="panel-header">
+        <h2>⚙️ Datos del Motor</h2>
+    </div>
+
+    <!-- ── TIPO DE MOTOR ── -->
+    <div class="panel-section-label">Tipo de motor</div>
+    <div class="motor-type-grid">
+        <button class="mtype-btn active" id="btnTypeThree" onclick="motorSetType('three')">
+            <span class="mtype-icon">🔺</span>Trifásico
+        </button>
+        <button class="mtype-btn" id="btnTypeSingle" onclick="motorSetType('single')">
+            <span class="mtype-icon">〰️</span>Monofásico
+        </button>
+    </div>
+    <input type="hidden" id="motorType" value="three">
+
+    <!-- ── DATOS DE PLACA ── -->
+    <div class="panel-section-label">Datos de placa (nameplate)</div>
+
+    <div class="form-group">
+        <label for="motorVoltage">Tensión nominal (V):</label>
+        <input type="number" id="motorVoltage" value="380" min="1" step="1">
+        <small>Trifásico: tensión de línea. Monofásico: tensión nominal.</small>
+    </div>
+
+    <div class="form-group">
+        <label>Potencia:</label>
+        <div class="power-dual">
+            <div>
+                <label style="font-size:10px;color:#64748b;">HP</label>
+                <input type="number" id="motorPowerHP" value="5" min="0.1" step="0.1" oninput="motorHPtoKW()">
+            </div>
+            <div class="power-dual-sep">=</div>
+            <div>
+                <label style="font-size:10px;color:#64748b;">kW</label>
+                <input type="number" id="motorPowerKW" value="3.728" min="0.01" step="0.001" oninput="motorKWtoHP()">
+            </div>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label for="motorRPM">Velocidad nominal (RPM):</label>
+        <input type="number" id="motorRPM" value="1450" min="100" step="1">
+        <small>Típico: 1450 (4P/50Hz), 1750 (4P/60Hz), 2900 (2P/50Hz)</small>
+    </div>
+
+    <div class="form-group">
+        <label for="motorFreq">Frecuencia (Hz):</label>
+        <select id="motorFreq">
+            <option value="50" selected>50 Hz</option>
+            <option value="60">60 Hz</option>
+        </select>
+    </div>
+
+    <div class="form-grid-2">
+        <div class="form-group">
+            <label for="motorCosfi">cos φ:</label>
+            <input type="number" id="motorCosfi" value="0.85" min="0.5" max="1" step="0.01">
+        </div>
+        <div class="form-group">
+            <label for="motorEta">η eficiencia:</label>
+            <input type="number" id="motorEta" value="0.87" min="0.5" max="0.99" step="0.01">
+        </div>
+    </div>
+
+    <!-- ── CLASE DE AISLAMIENTO ── -->
+    <div class="panel-section-label">Clase de aislamiento</div>
+    <div class="ins-class-row">
+        <button class="ins-btn ins-A" id="insA" onclick="motorSetInsClass('A')">A<br><span style="font-weight:400;font-size:9px;">105°C</span></button>
+        <button class="ins-btn ins-B active" id="insB" onclick="motorSetInsClass('B')">B<br><span style="font-weight:400;font-size:9px;">130°C</span></button>
+        <button class="ins-btn ins-F" id="insF" onclick="motorSetInsClass('F')">F<br><span style="font-weight:400;font-size:9px;">155°C</span></button>
+        <button class="ins-btn ins-H" id="insH" onclick="motorSetInsClass('H')">H<br><span style="font-weight:400;font-size:9px;">180°C</span></button>
+    </div>
+    <input type="hidden" id="motorInsClass" value="B">
+
+    <!-- ── CONEXIÓN TRIFÁSICA ── -->
+    <div id="motorThreePhaseSection">
+        <div class="panel-section-label">Conexión trifásica</div>
+        <div class="form-group">
+            <label for="motorConnection">Conexión:</label>
+            <select id="motorConnection">
+                <option value="star" selected>Estrella (Y)</option>
+                <option value="delta">Triángulo (Δ)</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- ── OPCIONES MONOFÁSICO ── -->
+    <div id="motorSinglePhaseSection" style="display:none;">
+        <div class="panel-section-label">Configuración monofásica</div>
+        <div class="form-group">
+            <label for="motorStartMethod">Método de arranque:</label>
+            <select id="motorStartMethod">
+                <option value="cap_start">Capacitor de arranque (C-start)</option>
+                <option value="cap_run">Capacitor permanente (C-run)</option>
+                <option value="split_phase">Fase partida (Split-phase)</option>
+                <option value="shaded_pole">Polos salientes (Shaded-pole)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="motorAuxRatio">Ratio vueltas aux / principal:</label>
+            <input type="number" id="motorAuxRatio" value="1.3" min="1.0" max="2.5" step="0.05">
+            <small>Típico: 1.2–1.6 para C-start; 1.3–1.8 para C-run</small>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         GEOMETRÍA DEL ESTÁTOR
+    ═══════════════════════════════════════════════════════ -->
+    <div class="panel-section-label">Geometría del estátor</div>
+
+    <!-- ── Selector de marca / carcasa estándar ── -->
+    <div style="background:rgba(34,211,238,0.06);border:1px solid rgba(34,211,238,0.20);
+        border-radius:8px;padding:10px 12px;margin-bottom:12px;">
+        <div style="font-size:11px;font-weight:600;color:#22d3ee;margin-bottom:8px;letter-spacing:.5px;">
+            ⚡ AUTOCOMPLETAR DESDE CATÁLOGO
+        </div>
+        <div class="form-grid-2" style="margin-bottom:8px;">
+            <div class="form-group" style="margin:0;">
+                <label style="font-size:11px;">Marca:</label>
+                <select id="motorBrand" onchange="motorBrandChanged()" style="font-size:11px;">
+                    <option value="">— Seleccionar —</option>
+                    <option value="weg">WEG W22</option>
+                    <option value="siemens">Siemens 1LE1</option>
+                    <option value="abb">ABB M2AA</option>
+                    <option value="leroy">Leroy-Somer LSR</option>
+                    <option value="nema">Genérico NEMA</option>
+                    <option value="generic_iec">Genérico IEC</option>
+                </select>
+            </div>
+            <div class="form-group" style="margin:0;">
+                <label style="font-size:11px;">Polos del catálogo:</label>
+                <select id="motorFramePoles" onchange="motorFrameChanged()" style="font-size:11px;">
+                    <option value="4">4 polos (~1500/1800)</option>
+                    <option value="2">2 polos (~3000/3600)</option>
+                    <option value="6">6 polos (~1000/1200)</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-group" style="margin:0 0 8px 0;">
+            <label style="font-size:11px;">Carcasa / Potencia:</label>
+            <select id="motorFrameSelect" onchange="motorApplyFrame()" style="font-size:11px;"
+                disabled>
+                <option value="">— Elija marca primero —</option>
+            </select>
+        </div>
+        <div id="motorFrameInfo" style="display:none;font-size:10px;color:#94a3b8;
+            background:rgba(0,0,0,0.2);border-radius:5px;padding:6px 8px;line-height:1.7;">
+        </div>
+    </div>
+
+    <div class="form-grid-2">
+        <div class="form-group">
+            <label for="motorExtDiam">Ø exterior (mm):</label>
+            <input type="number" id="motorExtDiam" value="200" min="20" step="1">
+        </div>
+        <div class="form-group">
+            <label for="motorBoreDiam">Ø interior (mm):</label>
+            <input type="number" id="motorBoreDiam" value="130" min="10" step="1">
+        </div>
+    </div>
+    <small style="color:#64748b;font-size:11px;display:block;margin-top:-4px;margin-bottom:10px;">
+        Medir con calibre — diámetros del paquete de chapas del estátor
+    </small>
+
+    <div class="form-group">
+        <label for="motorStackLength">Longitud del paquete L (mm):</label>
+        <input type="number" id="motorStackLength" value="90" min="10" step="1">
+        <small>Longitud axial del paquete de chapas (sin incluir cabezas de bobina)</small>
+    </div>
+
+    <div class="form-group">
+        <label for="motorSlots">Número de ranuras Q:</label>
+        <input type="number" id="motorSlots" value="36" min="12" max="144" step="1">
+        <small>Contar todas las ranuras del estátor</small>
+    </div>
+
+    <div class="form-group">
+        <label for="motorSteelType">Material del núcleo:</label>
+        <select id="motorSteelType">
+            <option value="silicon_steel" selected>Acero al silicio (M330-35A)</option>
+            <option value="grain_oriented">Acero grano orientado (M100-23S)</option>
+            <option value="m19">Acero M19 (0.35mm, baja pérdida)</option>
+            <option value="m45">Acero M45 (0.47mm, estándar)</option>
+            <option value="custom_steel">Personalizado</option>
+        </select>
+    </div>
+
+    <div id="customSteelSection" style="display:none;">
+        <div class="form-grid-2">
+            <div class="form-group">
+                <label for="motorSteelLoss" style="font-size:10px;">Pérdida W/kg @ 1.5T 50Hz</label>
+                <input type="number" id="motorSteelLoss" value="2.5" min="0.1" step="0.1">
+            </div>
+            <div class="form-group">
+                <label for="motorSteelDens" style="font-size:10px;">Densidad (kg/dm³)</label>
+                <input type="number" id="motorSteelDens" value="7.65" min="6" max="8" step="0.01">
+            </div>
+        </div>
+    </div>
+
+    <!-- ── DENSIDAD DE FLUJO ── -->
+    <div class="panel-section-label">Densidad de flujo</div>
+
+    <div class="form-group">
+        <label for="motorBav">
+            Densidad de flujo promedio Bav (T):
+            <span class="calc-badge" id="bav_calc_badge" style="display:none;">calculado</span>
+        </label>
+        <div class="input-with-btn">
+            <input type="number" id="motorBav" value="0.70" min="0.3" max="1.2" step="0.01">
+            <button class="btn-auto-small" onclick="motorAutoBav()" title="Calcular Bav desde geometría">⚡ Auto</button>
+        </div>
+        <small>Típico: 0.65–0.85 T · Use ⚡ Auto para calcular desde OD/ID/ranuras</small>
+    </div>
+
+    <!-- ── PASO DE BOBINA ── -->
+    <div class="panel-section-label">Paso de bobina</div>
+    <div class="pitch-grid">
+        <button class="pitch-btn active" id="pitchFull" onclick="motorSetPitch('full')">
+            Paso pleno<br><span style="font-size:10px;font-weight:400;">y = τp</span>
+        </button>
+        <button class="pitch-btn" id="pitchShort" onclick="motorSetPitch('short')">
+            Paso corto<br><span style="font-size:10px;font-weight:400;">y &lt; τp</span>
+        </button>
+    </div>
+    <input type="hidden" id="motorPitchType" value="full">
+    <div id="pitchRatioSection" style="display:none;" class="form-group">
+        <label for="motorPitchRatio">Ratio de paso (β = y/τp):</label>
+        <input type="number" id="motorPitchRatio" value="0.833" min="0.5" max="0.99" step="0.001">
+        <small>5/6 = 0.833 (más común), 2/3 = 0.667, 3/4 = 0.750</small>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         TIPO Y DIMENSIONES DE RANURA
+    ═══════════════════════════════════════════════════════ -->
+    <div class="panel-section-label">Tipo y dimensiones de ranura</div>
+
+    <div class="slot-type-grid">
+        <button class="stype-btn active" id="slotTypeRect" onclick="motorSetSlotType('rect')">
+            <span class="stype-icon">▭</span>Rectangular
+        </button>
+        <button class="stype-btn" id="slotTypeTrap" onclick="motorSetSlotType('trap')">
+            <span class="stype-icon">⌂</span>Trapezoidal
+        </button>
+        <button class="stype-btn" id="slotTypeSemi" onclick="motorSetSlotType('semi')">
+            <span class="stype-icon">◑</span>Semicircular
+        </button>
+    </div>
+    <input type="hidden" id="motorSlotType" value="rect">
+
+    <!-- Diagrama dinámico de ranura -->
+    <div class="slot-diagram-wrap" id="slotDiagramWrap">
+        <!-- SVG se genera por JS -->
+    </div>
+
+    <!-- Campos rectangulares -->
+    <div id="slotFieldsRect">
+        <div class="form-grid-2">
+            <div class="form-group">
+                <label for="slotB1" style="font-size:11px;">b₁ — ancho boca (mm)</label>
+                <input type="number" id="slotB1" value="3.0" min="0.5" step="0.1" oninput="motorUpdateSlotDiagram()">
+            </div>
+            <div class="form-group">
+                <label for="slotH1" style="font-size:11px;">h₁ — alto boca (mm)</label>
+                <input type="number" id="slotH1" value="1.0" min="0" step="0.1" oninput="motorUpdateSlotDiagram()">
+            </div>
+        </div>
+        <div class="form-grid-2">
+            <div class="form-group">
+                <label for="slotBw" style="font-size:11px;">bw — ancho cuerpo (mm)</label>
+                <input type="number" id="slotBw" value="5.5" min="1" step="0.1" oninput="motorUpdateSlotDiagram()">
+            </div>
+            <div class="form-group">
+                <label for="slotHw" style="font-size:11px;">hw — alto cuerpo (mm)</label>
+                <input type="number" id="slotHw" value="18.0" min="1" step="0.1" oninput="motorUpdateSlotDiagram()">
+            </div>
+        </div>
+    </div>
+
+    <!-- Campos trapezoidales -->
+    <div id="slotFieldsTrap" style="display:none;">
+        <div class="form-grid-2">
+            <div class="form-group">
+                <label for="trapB1" style="font-size:11px;">b₁ — ancho boca (mm)</label>
+                <input type="number" id="trapB1" value="3.0" min="0.5" step="0.1" oninput="motorUpdateSlotDiagram()">
+            </div>
+            <div class="form-group">
+                <label for="trapH1" style="font-size:11px;">h₁ — alto boca (mm)</label>
+                <input type="number" id="trapH1" value="1.0" min="0" step="0.1" oninput="motorUpdateSlotDiagram()">
+            </div>
+        </div>
+        <div class="form-grid-2">
+            <div class="form-group">
+                <label for="trapBtop" style="font-size:11px;">b_top — ancho superior (mm)</label>
+                <input type="number" id="trapBtop" value="4.0" min="1" step="0.1" oninput="motorUpdateSlotDiagram()">
+            </div>
+            <div class="form-group">
+                <label for="trapBbot" style="font-size:11px;">b_bot — ancho inferior (mm)</label>
+                <input type="number" id="trapBbot" value="7.0" min="1" step="0.1" oninput="motorUpdateSlotDiagram()">
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="trapHw" style="font-size:11px;">hw — alto cuerpo (mm)</label>
+            <input type="number" id="trapHw" value="18.0" min="1" step="0.1" oninput="motorUpdateSlotDiagram()">
+        </div>
+    </div>
+
+    <!-- Campos semicirculares -->
+    <div id="slotFieldsSemi" style="display:none;">
+        <div class="form-grid-2">
+            <div class="form-group">
+                <label for="semiB1" style="font-size:11px;">b₁ — ancho boca (mm)</label>
+                <input type="number" id="semiB1" value="3.0" min="0.5" step="0.1" oninput="motorUpdateSlotDiagram()">
+            </div>
+            <div class="form-group">
+                <label for="semiH1" style="font-size:11px;">h₁ — alto boca (mm)</label>
+                <input type="number" id="semiH1" value="1.0" min="0" step="0.1" oninput="motorUpdateSlotDiagram()">
+            </div>
+        </div>
+        <div class="form-grid-2">
+            <div class="form-group">
+                <label for="semiHw" style="font-size:11px;">hw — alto cuerpo (mm)</label>
+                <input type="number" id="semiHw" value="16.0" min="1" step="0.1" oninput="motorUpdateSlotDiagram()">
+            </div>
+            <div class="form-group">
+                <label for="semiR" style="font-size:11px;">r — radio fondo (mm)</label>
+                <input type="number" id="semiR" value="3.5" min="0.5" step="0.1" oninput="motorUpdateSlotDiagram()">
+            </div>
+        </div>
+    </div>
+
+    <small style="color:#64748b;font-size:11px;display:block;margin-bottom:14px;">
+        Las dimensiones de ranura permiten calcular el factor de llenado real y la densidad de flujo en el diente.
+    </small>
+
+    <!-- ── DATOS ORIGINALES (REFERENCIA) ── -->
+    <div class="panel-section-label">Datos originales (referencia, opcional)</div>
+    <div class="form-grid-2">
+        <div class="form-group">
+            <label for="motorExistAWG" style="font-size:11px;">AWG original</label>
+            <input type="number" id="motorExistAWG" placeholder="ej: 20" min="10" max="40">
+        </div>
+        <div class="form-group">
+            <label for="motorExistTurns" style="font-size:11px;">Vueltas/bobina original</label>
+            <input type="number" id="motorExistTurns" placeholder="ej: 45" min="1">
+        </div>
+    </div>
+
+    <button class="btn-primary" onclick="calculateMotor()" style="margin-top:20px;">⚙️ Calcular Devanado</button>
+    <button id="btnAutoCorrect" class="btn-secondary" onclick="motorAutoCorrect()" style="margin-top:8px;background:rgba(245,158,11,0.12);border-color:rgba(245,158,11,0.4);color:#fcd34d;">🔧 Corregir Cálculo</button>
+    <button class="btn-secondary" onclick="motorClearResults()" style="margin-top:8px;">Limpiar</button>
+
+</aside>
+
+<!-- ═══════════════════════════════ RESULTADOS ═══════════════════════════════ -->
+<main class="results-area">
+    <div class="results-header">
+        <h2>📊 Resultados del Devanado</h2>
+    </div>
+    <div id="motorValidation" class="validation-container"></div>
+    <div id="motorOptimResult" style="display:none;"></div>
+    <div id="motorResults" class="result-container">
+        <p class="placeholder-text">Configure los parámetros del motor y presione "Calcular Devanado"</p>
+    </div>
+
+    <div class="canvas-row" style="margin-top:20px;">
+        <div class="canvas-container">
+            <h3>Sección Transversal del Estátor</h3>
+            <canvas id="motorStatorCanvas"></canvas>
+        </div>
+        <div class="canvas-container">
+            <h3>Distribución de Ranuras por Fase</h3>
+            <canvas id="motorSlotCanvas"></canvas>
+        </div>
+    </div>
+</main>
+
+</div>
+</div>
+
+<!-- FAB guardar -->
+<button class="sticky-save" onclick="motorSaveDesign()" title="Guardar diseño (Ctrl+S)">💾 Guardar diseño</button>
+
+<script src="dialog.js" defer></script>
+<script src="data.js" defer></script>
+<script src="calculations.js" defer></script>
+<script src="val.js" defer></script>
+<script src="graphics.js" defer></script>
+<script src="motor.js" defer></script>
+<script src="export.js" defer></script>
+<script src="main.js" defer></script>
+</body>
+</html>

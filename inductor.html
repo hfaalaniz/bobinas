@@ -1,0 +1,277 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diseño de Inductores — Suite Magnética</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles_validation.css">
+    <link rel="stylesheet" href="styles_additional.css">
+    <link rel="stylesheet" href="styles_modules.css">
+    <style>
+        .page-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px 24px;
+            background: rgba(0,0,0,0.3);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #94a3b8;
+            text-decoration: none;
+            font-size: 14px;
+            padding: 8px 14px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.12);
+            transition: all .2s;
+        }
+        .back-btn:hover { color: #f1f5f9; background: rgba(255,255,255,0.08); }
+        .page-title { font-size: 1.1rem; font-weight: 700; color: #f1f5f9; }
+        .page-subtitle { font-size: 0.8rem; color: #64748b; }
+    </style>
+</head>
+<body>
+
+<div class="page-header">
+    <a href="index.html" class="back-btn">
+        ← Inicio
+    </a>
+    <div>
+        <div class="page-title">🔌 Diseño de Inductores y Transformadores</div>
+        <div class="page-subtitle">Núcleo toroidal · Aire · Ferrita · 16 materiales</div>
+    </div>
+</div>
+
+<!-- ── NAVEGACIÓN INTERNA (INDUCTOR / TRANSFORMADOR) ── -->
+<nav class="main-nav" style="display:flex;gap:8px;padding:12px 20px;background:rgba(0,0,0,0.2);">
+    <button class="nav-btn active" data-page="inductor">🔌 Inductor</button>
+    <button class="nav-btn" data-page="transformer">🔄 Transformador</button>
+</nav>
+
+<!-- ══════════════════════════════ PÁGINA INDUCTOR ══════════════════════════════ -->
+<div class="page active" id="page-inductor">
+    <div class="main-layout">
+        <!-- Panel lateral -->
+        <aside class="panel">
+            <div class="panel-header">
+                <h2>⚙️ Parámetros del Inductor</h2>
+                <div class="mode-buttons">
+                    <button class="mode-btn-mini active" onclick="setMode('simple')">Simple</button>
+                    <button class="mode-btn-mini" onclick="setMode('advanced')">Avanzado</button>
+                </div>
+            </div>
+
+            <div class="form-group" id="modeTitle">Parámetros de Entrada</div>
+
+            <div class="form-group">
+                <label for="coreType">Tipo de Núcleo:</label>
+                <select id="coreType">
+                    <option value="air">Aire</option>
+                    <option value="ferrite_mn_zn" selected>Ferrita MnZn (EMI)</option>
+                    <option value="ferrite_ni_zn">Ferrita NiZn (HF)</option>
+                    <option value="ferrite">Ferrita genérica</option>
+                    <option value="ferrite_power">Ferrita de potencia</option>
+                    <option value="iron_powder">Polvo de hierro</option>
+                    <option value="iron_powder_52">Polvo de hierro 52</option>
+                    <option value="sendust">Sendust (Fe-Si-Al)</option>
+                    <option value="mpp">MPP (Ni-Mo-Fe)</option>
+                    <option value="high_flux">High Flux</option>
+                    <option value="silicon_steel">Acero silicio (laminado)</option>
+                    <option value="grain_oriented">Acero grano orientado</option>
+                    <option value="nanocrystalline">Nanocristalino</option>
+                    <option value="amorphous">Amorfo metálico</option>
+                    <option value="toroid">Toroide genérico</option>
+                    <option value="custom">Personalizado</option>
+                </select>
+            </div>
+
+            <!-- Parámetros núcleo de aire -->
+            <div id="airCoreParams" style="display:none;">
+                <div class="form-group">
+                    <label for="coilDiameter">Diámetro de la Bobina (mm):</label>
+                    <input type="number" id="coilDiameter" value="20" min="1" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label for="coilLength">Longitud de la Bobina (mm):</label>
+                    <input type="number" id="coilLength" value="30" min="1" step="0.1">
+                </div>
+            </div>
+
+            <!-- Parámetros toroide -->
+            <div id="toroidParams">
+                <div class="form-group">
+                    <label for="toroidOD">Diámetro Exterior (mm):</label>
+                    <input type="number" id="toroidOD" value="30" min="1" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label for="toroidID">Diámetro Interior (mm):</label>
+                    <input type="number" id="toroidID" value="15" min="1" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label for="toroidHeight">Altura del Toroide (mm):</label>
+                    <input type="number" id="toroidHeight" value="10" min="1" step="0.1">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Inductancia Deseada:</label>
+                <div style="display:flex;gap:8px;">
+                    <input type="number" id="inductance" value="100" min="0.1" step="0.1" style="flex:1;">
+                    <select id="inductanceUnit" style="width:80px;">
+                        <option value="uH">μH</option>
+                        <option value="mH" selected>mH</option>
+                        <option value="H">H</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="current">Corriente (A):</label>
+                <input type="number" id="current" value="1" min="0.01" step="0.01">
+            </div>
+
+            <div class="form-group">
+                <label for="wireGauge">Calibre del Cable (AWG):</label>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <input type="number" id="wireGauge" value="20" min="10" max="40" style="flex:1;min-width:0;">
+                    <button class="btn-secondary" onclick="autoSelectWireGauge()" title="Auto-selección" style="width:auto;flex-shrink:0;padding:9px 14px;margin:0;font-size:13px;">🔄 Auto</button>
+                </div>
+                <small id="wireGaugeInfo" style="color:#666;display:block;margin-top:4px;"></small>
+            </div>
+
+            <!-- Parámetros avanzados -->
+            <div id="advancedParams" style="display:none;">
+                <div class="form-group">
+                    <label for="permeability">Permeabilidad Relativa (μr):</label>
+                    <input type="number" id="permeability" value="2000" min="1" step="1">
+                </div>
+                <div class="form-group">
+                    <label for="wireGaugeAdv">Calibre Avanzado (AWG):</label>
+                    <input type="number" id="wireGaugeAdv" value="20" min="10" max="40">
+                </div>
+            </div>
+
+            <div id="validationMessages"></div>
+
+            <button class="btn-primary" onclick="calculateInductorWithValidation()">🔧 Calcular Inductor</button>
+            <button class="btn-optimize" onclick="optimizeInductor()">⚡ Corregir Automáticamente</button>
+            <button class="btn-secondary" onclick="saveCurrentDesign()" style="margin-top:8px;">💾 Guardar Diseño</button>
+        </aside>
+
+        <!-- Área de resultados -->
+        <main class="results-area">
+            <div class="results-header">
+                <h2>📊 Resultados del Cálculo</h2>
+                <a href="exportar.html" class="btn-secondary" style="font-size:12px;">Ver diseños guardados →</a>
+            </div>
+            <div id="results" class="result-container">
+                <p class="placeholder-text">Configure los parámetros y presione "Calcular Inductor"</p>
+            </div>
+            <div class="canvas-row">
+                <div class="canvas-container">
+                    <h3>Visualización del Devanado</h3>
+                    <canvas id="coilCanvas"></canvas>
+                </div>
+                <div class="canvas-container">
+                    <h3>Curva B-H</h3>
+                    <canvas id="bhChart"></canvas>
+                </div>
+            </div>
+        </main>
+    </div>
+</div>
+
+<!-- ══════════════════════════════ PÁGINA TRANSFORMADOR ══════════════════════════════ -->
+<div class="page" id="page-transformer">
+    <div class="main-layout">
+        <aside class="panel">
+            <div class="panel-header">
+                <h2>⚙️ Parámetros del Transformador</h2>
+            </div>
+
+            <div class="form-group">
+                <label for="transCore">Tipo de Núcleo:</label>
+                <select id="transCore">
+                    <option value="silicon_steel" selected>Acero Silicio</option>
+                    <option value="grain_oriented">Acero Grano Orientado</option>
+                    <option value="ferrite_mn_zn">Ferrita MnZn</option>
+                    <option value="ferrite_power">Ferrita de Potencia</option>
+                    <option value="nanocrystalline">Nanocristalino</option>
+                    <option value="amorphous">Amorfo</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="vPrimary">Voltaje Primario (V):</label>
+                <input type="number" id="vPrimary" value="220" min="1" step="1">
+            </div>
+            <div class="form-group">
+                <label for="vSecondary">Voltaje Secundario (V):</label>
+                <input type="number" id="vSecondary" value="12" min="0.1" step="0.1">
+            </div>
+            <div class="form-group">
+                <label for="iSecondary">Corriente Secundaria (A):</label>
+                <input type="number" id="iSecondary" value="2" min="0.01" step="0.01">
+            </div>
+            <div class="form-group">
+                <label for="frequency">Frecuencia (Hz):</label>
+                <input type="number" id="frequency" value="50" min="1" step="1">
+            </div>
+            <div class="form-group">
+                <label for="efficiency">Eficiencia Esperada (%):</label>
+                <input type="number" id="efficiency" value="90" min="50" max="99" step="1">
+            </div>
+            <div class="form-group">
+                <label for="transOD">Diámetro Exterior del Núcleo (mm):</label>
+                <input type="number" id="transOD" value="50" min="5" step="1">
+            </div>
+            <div class="form-group">
+                <label for="transID">Diámetro Interior del Núcleo (mm):</label>
+                <input type="number" id="transID" value="25" min="1" step="1">
+            </div>
+            <div class="form-group">
+                <label for="transHeight">Altura del Núcleo (mm):</label>
+                <input type="number" id="transHeight" value="20" min="1" step="1">
+            </div>
+
+            <div id="validationMessagesTransformer"></div>
+
+            <button class="btn-primary" onclick="calculateTransformerWithValidation()">🔄 Calcular Transformador</button>
+            <button class="btn-secondary" onclick="saveCurrentDesign()" style="margin-top:8px;">💾 Guardar Diseño</button>
+        </aside>
+
+        <main class="results-area">
+            <div class="results-header">
+                <h2>📊 Resultados del Transformador</h2>
+            </div>
+            <div id="transformerResults" class="result-container">
+                <p class="placeholder-text">Configure los parámetros y presione "Calcular Transformador"</p>
+            </div>
+            <div class="canvas-row">
+                <div class="canvas-container">
+                    <h3>Diagrama del Transformador</h3>
+                    <canvas id="transformerCanvas"></canvas>
+                </div>
+                <div class="canvas-container">
+                    <h3>Curva B-H</h3>
+                    <canvas id="transformerBHChart"></canvas>
+                </div>
+            </div>
+        </main>
+    </div>
+</div>
+
+<script src="dialog.js" defer></script>
+<script src="data.js" defer></script>
+<script src="calculations.js" defer></script>
+<script src="val.js" defer></script>
+<script src="graphics.js" defer></script>
+<script src="export.js" defer></script>
+<script src="main.js" defer></script>
+</body>
+</html>
+

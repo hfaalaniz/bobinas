@@ -1,0 +1,175 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Filtros LC / EMI — Suite Magnética</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles_validation.css">
+    <link rel="stylesheet" href="styles_additional.css">
+    <link rel="stylesheet" href="styles_modules.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <style>
+        .page-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px 24px;
+            background: rgba(0,0,0,0.3);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #94a3b8;
+            text-decoration: none;
+            font-size: 14px;
+            padding: 8px 14px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.12);
+            transition: all .2s;
+        }
+        .back-btn:hover { color: #f1f5f9; background: rgba(255,255,255,0.08); }
+        .page-title { font-size: 1.1rem; font-weight: 700; color: #f1f5f9; }
+        .page-subtitle { font-size: 0.8rem; color: #64748b; }
+        .topology-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .topology-btn {
+            padding: 10px 6px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(255,255,255,0.05);
+            color: #94a3b8;
+            cursor: pointer;
+            font-size: 13px;
+            text-align: center;
+            transition: all .2s;
+        }
+        .topology-btn.active, .topology-btn:hover {
+            background: rgba(17,153,142,0.2);
+            border-color: #11998e;
+            color: #34d399;
+        }
+    </style>
+</head>
+<body>
+
+<div class="page-header">
+    <a href="index.html" class="back-btn">← Inicio</a>
+    <div>
+        <div class="page-title">📐 Diseño de Filtros LC / EMI</div>
+        <div class="page-subtitle">Butterworth · LP / HP / BP / Notch · Topología L, T, Pi · Órdenes 1–3</div>
+    </div>
+</div>
+
+<div class="page active" id="page-lcfilter">
+    <div class="main-layout">
+        <aside class="panel">
+            <div class="panel-header">
+                <h2>⚙️ Parámetros del Filtro</h2>
+            </div>
+
+            <div class="form-group">
+                <label for="lfType">Tipo de Filtro:</label>
+                <select id="lfType">
+                    <option value="lowpass" selected>Paso Bajo (Low Pass)</option>
+                    <option value="highpass">Paso Alto (High Pass)</option>
+                    <option value="bandpass">Paso Banda (Band Pass)</option>
+                    <option value="notch">Rechazo de Banda (Notch)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Topología:</label>
+                <div class="topology-grid">
+                    <button class="topology-btn active" onclick="lfSelectTopology(this,'L')">
+                        <div style="font-size:18px;">⌐</div>
+                        <div>L-section</div>
+                    </button>
+                    <button class="topology-btn" onclick="lfSelectTopology(this,'T')">
+                        <div style="font-size:18px;">T</div>
+                        <div>T-filter</div>
+                    </button>
+                    <button class="topology-btn" onclick="lfSelectTopology(this,'Pi')">
+                        <div style="font-size:18px;">π</div>
+                        <div>Pi-filter</div>
+                    </button>
+                </div>
+                <input type="hidden" id="lfTopology" value="L">
+            </div>
+
+            <div class="form-group">
+                <label for="lfOrder">Orden del Filtro:</label>
+                <select id="lfOrder">
+                    <option value="1">1er orden (−20 dB/dec)</option>
+                    <option value="2" selected>2do orden (−40 dB/dec)</option>
+                    <option value="3">3er orden (−60 dB/dec)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="lfFreqCut">Frecuencia de Corte fc (Hz):</label>
+                <input type="number" id="lfFreqCut" value="1000" min="1" step="1">
+                <small style="color:#64748b;font-size:11px;">Para BP/Notch: frecuencia central f₀</small>
+            </div>
+
+            <div class="form-group">
+                <label for="lfLoad">Impedancia de Carga Z (Ω):</label>
+                <input type="number" id="lfLoad" value="50" min="0.1" step="0.1">
+            </div>
+
+            <div class="form-group">
+                <label for="lfCurrent">Corriente Máxima (A):</label>
+                <input type="number" id="lfCurrent" value="1" min="0.001" step="0.001">
+            </div>
+
+            <button class="btn-primary" onclick="calculateLCFilter()">📐 Calcular Filtro</button>
+            <a href="exportar.html" class="btn-secondary" style="display:block;margin-top:8px;text-align:center;text-decoration:none;padding:10px;">
+                💾 Ver diseños guardados
+            </a>
+        </aside>
+
+        <main class="results-area">
+            <div class="results-header">
+                <h2>📊 Resultados del Filtro</h2>
+            </div>
+            <div id="lfResults" class="result-container">
+                <p class="placeholder-text">Configure los parámetros y presione "Calcular Filtro"</p>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px;">
+                <div class="canvas-container">
+                    <h3>Esquemático del Filtro</h3>
+                    <canvas id="lfSchematic"></canvas>
+                </div>
+                <div class="canvas-container">
+                    <h3>Respuesta en Frecuencia</h3>
+                    <canvas id="lfChart"></canvas>
+                </div>
+            </div>
+        </main>
+    </div>
+</div>
+
+<script>
+    function lfSelectTopology(btn, val) {
+        document.querySelectorAll('.topology-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('lfTopology').value = val;
+    }
+</script>
+<script src="dialog.js" defer></script>
+<script src="data.js" defer></script>
+<script src="calculations.js" defer></script>
+<script src="val.js" defer></script>
+<script src="graphics.js" defer></script>
+<script src="lcfilter.js" defer></script>
+<script src="export.js" defer></script>
+<script src="main.js" defer></script>
+</body>
+</html>
+

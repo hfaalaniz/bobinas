@@ -1,0 +1,224 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Diseños — Suite Magnética</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles_validation.css">
+    <link rel="stylesheet" href="styles_additional.css">
+    <link rel="stylesheet" href="styles_modules.css">
+    <style>
+        .page-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px 24px;
+            background: rgba(0,0,0,0.3);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #94a3b8;
+            text-decoration: none;
+            font-size: 14px;
+            padding: 8px 14px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.12);
+            transition: all .2s;
+        }
+        .back-btn:hover { color: #f1f5f9; background: rgba(255,255,255,0.08); }
+        .page-title { font-size: 1.1rem; font-weight: 700; color: #f1f5f9; }
+        .page-subtitle { font-size: 0.8rem; color: #64748b; }
+
+        .export-layout {
+            max-width: 960px;
+            margin: 30px auto;
+            padding: 0 24px;
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 24px;
+        }
+        .action-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 20px;
+        }
+        .action-card h3 {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #64748b;
+            margin-bottom: 14px;
+        }
+        .action-btn {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.08);
+            background: rgba(255,255,255,0.04);
+            color: #f1f5f9;
+            cursor: pointer;
+            font-size: 14px;
+            margin-bottom: 10px;
+            transition: all .2s;
+            text-align: left;
+        }
+        .action-btn:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.18); }
+        .action-btn-icon { font-size: 20px; width: 32px; text-align: center; }
+        .action-btn-text { display: flex; flex-direction: column; }
+        .action-btn-label { font-weight: 600; }
+        .action-btn-desc { font-size: 11px; color: #64748b; margin-top: 2px; }
+
+        .import-area {
+            border: 2px dashed rgba(255,255,255,0.15);
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all .2s;
+        }
+        .import-area:hover { border-color: rgba(102,126,234,0.5); background: rgba(102,126,234,0.05); }
+        .import-area input { display: none; }
+        .import-area p { color: #64748b; font-size: 13px; margin-top: 8px; }
+
+        .danger-zone {
+            margin-top: 14px;
+            padding-top: 14px;
+            border-top: 1px solid rgba(239,68,68,0.2);
+        }
+        .btn-danger-full {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(239,68,68,0.3);
+            background: rgba(239,68,68,0.08);
+            color: #f87171;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all .2s;
+        }
+        .btn-danger-full:hover { background: rgba(239,68,68,0.18); }
+
+        .designs-panel {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 24px;
+        }
+        .designs-panel h3 { font-size: 1rem; font-weight: 700; color: #f1f5f9; margin-bottom: 16px; }
+        .designs-count { font-size: 12px; color: #64748b; float: right; }
+
+        @media (max-width: 720px) {
+            .export-layout { grid-template-columns: 1fr; padding: 0 16px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="page-header">
+    <a href="index.html" class="back-btn">← Inicio</a>
+    <div>
+        <div class="page-title">💾 Gestión de Diseños Guardados</div>
+        <div class="page-subtitle">JSON · CSV · Reporte PDF · Importar</div>
+    </div>
+</div>
+
+<div class="export-layout">
+    <!-- Panel de acciones -->
+    <div>
+        <div class="action-card">
+            <h3>Exportar</h3>
+
+            <button class="action-btn" onclick="exportToJSON()">
+                <span class="action-btn-icon">📦</span>
+                <span class="action-btn-text">
+                    <span class="action-btn-label">Exportar JSON</span>
+                    <span class="action-btn-desc">Archivo de respaldo completo</span>
+                </span>
+            </button>
+
+            <button class="action-btn" onclick="exportToCSV()">
+                <span class="action-btn-icon">📊</span>
+                <span class="action-btn-text">
+                    <span class="action-btn-label">Exportar CSV</span>
+                    <span class="action-btn-desc">Para Excel / hojas de cálculo</span>
+                </span>
+            </button>
+
+            <button class="action-btn" onclick="exportToPDF()">
+                <span class="action-btn-icon">🖨️</span>
+                <span class="action-btn-text">
+                    <span class="action-btn-label">Reporte PDF</span>
+                    <span class="action-btn-desc">Imprimir → Guardar como PDF</span>
+                </span>
+            </button>
+        </div>
+
+        <div class="action-card" style="margin-top:16px;">
+            <h3>Importar</h3>
+            <label class="import-area" for="importFile">
+                <div style="font-size:32px;">📂</div>
+                <strong style="color:#94a3b8;">Seleccionar archivo JSON</strong>
+                <p>Arrastra y suelta o haz clic para importar diseños previamente exportados</p>
+                <input type="file" id="importFile" accept=".json">
+            </label>
+        </div>
+
+        <div class="action-card" style="margin-top:16px;">
+            <h3 style="color:#64748b;">Zona de Peligro</h3>
+            <div class="danger-zone">
+                <button class="btn-danger-full" onclick="clearAllDesigns()">
+                    🗑️ Eliminar todos los diseños
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de diseños -->
+    <div class="designs-panel">
+        <h3>
+            Diseños Guardados
+            <span class="designs-count" id="designsCount"></span>
+        </h3>
+        <div id="savedDesigns">
+            <p style="color:#64748b;text-align:center;padding:40px 20px;">Cargando diseños...</p>
+        </div>
+    </div>
+</div>
+
+<script src="dialog.js" defer></script>
+<script src="data.js" defer></script>
+<script src="calculations.js" defer></script>
+<script src="val.js" defer></script>
+<script src="graphics.js" defer></script>
+<script src="export.js" defer></script>
+<script src="main.js" defer></script>
+<script>
+    // Actualizar contador de diseños cuando se carga la lista
+    document.addEventListener('DOMContentLoaded', function() {
+        const origUpdate = window.updateSavedDesignsList;
+        if (typeof origUpdate === 'function') {
+            origUpdate();
+        }
+    });
+    // Observar cambios en el contenedor para actualizar el contador
+    const observer = new MutationObserver(() => {
+        const items = document.querySelectorAll('.saved-design-item');
+        const countEl = document.getElementById('designsCount');
+        if (countEl) countEl.textContent = items.length ? `(${items.length})` : '';
+    });
+    document.addEventListener('DOMContentLoaded', () => {
+        const container = document.getElementById('savedDesigns');
+        if (container) observer.observe(container, { childList: true, subtree: true });
+    });
+</script>
+</body>
+</html>
+

@@ -1,0 +1,382 @@
+/* ============================================================================
+   VALIDATION STYLES - Estilos para Sistema de Validación
+   ============================================================================ */
+
+/* Contenedor principal de validación */
+.validation-container {
+    margin: 20px 0;
+    padding: 0;
+    border-radius: 8px;
+    overflow: hidden;
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Secciones de validación */
+.validation-errors,
+.validation-warnings,
+.validation-suggestions,
+.validation-success {
+    margin-bottom: 15px;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Títulos de sección */
+.validation-title {
+    padding: 12px 15px;
+    font-weight: bold;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.validation-title.error {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    color: white;
+}
+
+.validation-title.warning {
+    background: linear-gradient(135deg, #f39c12, #e67e22);
+    color: white;
+}
+
+.validation-title.suggestion {
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: white;
+}
+
+/* Mensajes individuales */
+.validation-message {
+    padding: 10px 15px;
+    font-size: 13px;
+    line-height: 1.5;
+    border-left: 4px solid;
+    background: white;
+}
+
+.validation-message.error {
+    border-left-color: #e74c3c;
+    background: #fef5f5;
+    color: #c0392b;
+}
+
+.validation-message.warning {
+    border-left-color: #f39c12;
+    background: #fef9f3;
+    color: #d68910;
+}
+
+.validation-message.suggestion {
+    border-left-color: #3498db;
+    background: #f0f8ff;
+    color: #2874a6;
+}
+
+.validation-message:not(:last-child) {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+/* Mensaje de éxito */
+.validation-success {
+    padding: 15px;
+    background: linear-gradient(135deg, #27ae60, #229954);
+    color: white;
+    border-radius: 8px;
+    font-weight: bold;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(39, 174, 96, 0.3);
+    animation: successPulse 0.5s ease-out;
+}
+
+@keyframes successPulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.02);
+    }
+}
+
+/* Estilos para inputs con errores */
+.input-error {
+    border: 2px solid #e74c3c !important;
+    background-color: #fef5f5 !important;
+    animation: shake 0.3s ease-in-out;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+
+.input-warning {
+    border: 2px solid #f39c12 !important;
+    background-color: #fef9f3 !important;
+}
+
+/* Tooltip de validación en tiempo real */
+.validation-tooltip {
+    position: absolute;
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    z-index: 1000;
+    pointer-events: none;
+    white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    animation: tooltipFade 0.2s ease-out;
+}
+
+@keyframes tooltipFade {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.validation-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: rgba(0, 0, 0, 0.9);
+}
+
+.validation-tooltip.error {
+    background: #e74c3c;
+}
+
+.validation-tooltip.warning {
+    background: #f39c12;
+}
+
+.validation-tooltip.suggestion {
+    background: #3498db;
+}
+
+/* Badge de validación en inputs */
+.input-validation-badge {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 16px;
+    pointer-events: none;
+}
+
+.input-validation-badge.success {
+    color: #27ae60;
+}
+
+.input-validation-badge.error {
+    color: #e74c3c;
+}
+
+.input-validation-badge.warning {
+    color: #f39c12;
+}
+
+/* Grupos de form con validación */
+.form-group {
+    position: relative;
+    margin-bottom: 15px;
+}
+
+.form-group.has-error label {
+    color: #e74c3c;
+}
+
+.form-group.has-warning label {
+    color: #f39c12;
+}
+
+.form-group.has-success label {
+    color: #27ae60;
+}
+
+/* Contador de caracteres / rangos */
+.input-range-indicator {
+    position: absolute;
+    right: 10px;
+    bottom: -20px;
+    font-size: 11px;
+    color: #95a5a6;
+}
+
+.input-range-indicator.out-of-range {
+    color: #e74c3c;
+    font-weight: bold;
+}
+
+/* Barra de progreso de validación */
+.validation-progress {
+    height: 4px;
+    background: #ecf0f1;
+    border-radius: 2px;
+    overflow: hidden;
+    margin: 15px 0;
+}
+
+.validation-progress-bar {
+    height: 100%;
+    transition: width 0.3s ease, background 0.3s ease;
+    border-radius: 2px;
+}
+
+.validation-progress-bar.low {
+    background: linear-gradient(90deg, #e74c3c, #f39c12);
+}
+
+.validation-progress-bar.medium {
+    background: linear-gradient(90deg, #f39c12, #f1c40f);
+}
+
+.validation-progress-bar.high {
+    background: linear-gradient(90deg, #27ae60, #2ecc71);
+}
+
+/* Lista de verificación de validación */
+.validation-checklist {
+    background: white;
+    border: 1px solid #ecf0f1;
+    border-radius: 8px;
+    padding: 15px;
+    margin: 15px 0;
+}
+
+.validation-checklist-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    font-size: 13px;
+    border-bottom: 1px solid #ecf0f1;
+}
+
+.validation-checklist-item:last-child {
+    border-bottom: none;
+}
+
+.validation-checklist-icon {
+    font-size: 16px;
+    min-width: 20px;
+}
+
+.validation-checklist-icon.checked {
+    color: #27ae60;
+}
+
+.validation-checklist-icon.unchecked {
+    color: #95a5a6;
+}
+
+.validation-checklist-icon.failed {
+    color: #e74c3c;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .validation-message {
+        font-size: 12px;
+        padding: 8px 12px;
+    }
+    
+    .validation-title {
+        font-size: 13px;
+        padding: 10px 12px;
+    }
+    
+    .validation-tooltip {
+        font-size: 11px;
+        padding: 6px 10px;
+    }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .validation-message.error {
+        background: rgba(231, 76, 60, 0.1);
+        color: #e74c3c;
+    }
+    
+    .validation-message.warning {
+        background: rgba(243, 156, 18, 0.1);
+        color: #f39c12;
+    }
+    
+    .validation-message.suggestion {
+        background: rgba(52, 152, 219, 0.1);
+        color: #3498db;
+    }
+    
+    .validation-checklist {
+        background: #2c3e50;
+        border-color: #34495e;
+    }
+    
+    .validation-checklist-item {
+        border-bottom-color: #34495e;
+    }
+}
+
+/* Animaciones de entrada */
+.validation-container > div {
+    animation: fadeInUp 0.3s ease-out backwards;
+}
+
+.validation-container > div:nth-child(1) {
+    animation-delay: 0.1s;
+}
+
+.validation-container > div:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.validation-container > div:nth-child(3) {
+    animation-delay: 0.3s;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Botón deshabilitado cuando hay errores */
+button.btn-primary:disabled {
+    background: #95a5a6;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+button.btn-primary:disabled:hover {
+    background: #95a5a6;
+    transform: none;
+}
