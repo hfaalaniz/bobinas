@@ -440,6 +440,13 @@ window.saveCurrentDesign = function() {
             iSecondary: document.getElementById('iSecondary')?.value,
             frequency: document.getElementById('frequency')?.value
         };
+    } else if (activePage.id === 'page-motor') {
+        if (typeof window.motorSaveDesign === 'function') {
+            window.motorSaveDesign();
+        } else {
+            showAlert('No hay un diseño activo para guardar.\nRealice un cálculo primero.', 'Sin diseño activo');
+        }
+        return;
     } else {
         showAlert('No hay un diseño activo para guardar.\nRealice un cálculo primero.', 'Sin diseño activo');
         return;

@@ -23,8 +23,15 @@
     const DEN_CU  = 8900;      // kg/m³
     const DEN_FE  = 7650;      // kg/m³ (acero al silicio laminado)
 
-    // ── Densidad de corriente máxima por clase de aislamiento (A/mm²) ────────
-    const J_MAX = { A: 4.0, B: 5.0, F: 5.5, H: 6.0 };
+    // ── Densidad de corriente según potencia (PDF "Calculo bobinados trifasicos") ──
+    // δ = 7 A/mm² para motores ≤ 10 HP; δ = 5.5 A/mm² para 10–50 HP.
+    // La clase de aislamiento impone el límite térmico superior pero no baja δ.
+    const J_MAX = { A: 4.0, B: 5.0, F: 5.5, H: 6.0 }; // límites térmicos por clase
+    function _jMaxForPower(powerHP, insClass) {
+        const j_pdf = powerHP <= 10 ? 7.0 : 5.5;   // criterio del PDF
+        const j_ins = J_MAX[insClass] || 5.0;        // límite térmico de la clase
+        return Math.min(j_pdf, j_ins * 1.20);        // no exceder 120% del límite térmico
+    }
 
     // ── Propiedades de aceros laminados para motores ──────────────────────────
     // loss_wkg: pérdidas específicas en W/kg @ B_ref [T], 50 Hz
@@ -131,12 +138,21 @@
         _v('motorSlots',      f.Q);
         _v('motorRPM',        rpm);
 
-        // Geometría de ranura rectangular con datos de catálogo
-        motorSetSlotType('rect');
-        _v('slotBw', f.bw);
-        _v('slotHw', f.hw);
-        _v('slotB1', f.b1);
-        _v('slotH1', f.h1);
+        // Geometría de ranura desde catálogo — soporta rectangular y trapezoidal
+        const slotT = f.slotType || 'rect';
+        motorSetSlotType(slotT);
+        if (slotT === 'trap') {
+            _v('trapBtop', f.btop || f.bw);
+            _v('trapBbot', f.bbot || f.bw);
+            _v('trapHw',   f.hw);
+            _v('trapB1',   f.b1);
+            _v('trapH1',   f.h1 || 1.0);
+        } else {
+            _v('slotBw', f.bw);
+            _v('slotHw', f.hw);
+            _v('slotB1', f.b1);
+            _v('slotH1', f.h1 || 1.0);
+        }
         motorUpdateSlotDiagram();
 
         // Tensión y conexión si el motor es para esa tensión
@@ -157,10 +173,19 @@
                 '<strong style="color:#22d3ee;">' + (_framesDB.brands.find(function(b){return b.id===brand;})||{name:brand}).name +
                 ' — Carcasa ' + f.frame + '</strong><br>' +
                 'OD ' + f.OD + ' mm &nbsp;·&nbsp; ID ' + f.ID + ' mm &nbsp;·&nbsp; L ' + f.L + ' mm<br>' +
-                'Q = ' + f.Q + ' ranuras &nbsp;·&nbsp; bw=' + f.bw + ' mm &nbsp;·&nbsp; hw=' + f.hw + ' mm<br>' +
+                'Q = ' + f.Q + ' ranuras &nbsp;·&nbsp; ' + (f.slotType === 'trap'
+                    ? 'b1=' + f.b1 + ' btop=' + f.btop + ' bbot=' + f.bbot + ' hw=' + f.hw + ' mm (trap)'
+                    : 'bw=' + f.bw + ' mm &nbsp;·&nbsp; hw=' + f.hw + ' mm') + '<br>' +
                 'RPM (' + freqKey + '): ' + rpm + ' &nbsp;·&nbsp; ' + f.poles + ' polos<br>' +
                 '<span style="color:#f59e0b;">&#9888; Datos de catálogo — verificar con el núcleo real.</span>';
             info.style.display = 'block';
+        }
+
+        // Auto-fill HP field from catalog
+        const hpField = document.getElementById('motorPowerHP');
+        if (hpField && f.hp) {
+            hpField.value = f.hp;
+            if (typeof motorHPtoKW === 'function') motorHPtoKW();
         }
 
         if (typeof showToast === 'function')
@@ -309,8 +334,11 @@
             const rs = (d.r || 3.5) * scale;
             const y0 = topY + h1s, y1 = topY + h1s + hr;
             const bx0 = cx - b1s / 2, bx1 = cx + b1s / 2;
+            // El fondo semicircular se dibuja correctamente: rect hasta y1-rs,
+            // luego dos arcos que forman el semicírculo (un arco por cada lado).
+            const rClamp = Math.min(rs, bw / 2); // radio no puede superar bw/2
             path = `<rect x="${bx0}" y="${topY}" width="${b1s}" height="${h1s}" fill="rgba(34,211,238,0.25)" stroke="#22d3ee" stroke-width="1.5"/>
-                    <path d="M${cx-bw/2},${y0} L${cx+bw/2},${y0} L${cx+bw/2},${y1-rs} A${rs},${rs},0,0,1,${cx-bw/2},${y1-rs} Z"
+                    <path d="M${cx-bw/2},${y0} L${cx+bw/2},${y0} L${cx+bw/2},${y1-rClamp} A${rClamp},${rClamp},0,0,1,${cx},${y1} A${rClamp},${rClamp},0,0,1,${cx-bw/2},${y1-rClamp} Z"
                         fill="rgba(34,211,238,0.18)" stroke="#22d3ee" stroke-width="1.5"/>
                     <text x="${cx}" y="${y1+14}" text-anchor="middle" font-size="9" fill="#64748b">bw=${d.bw||5} r=${d.r||3.5}</text>`;
         }
@@ -403,9 +431,11 @@
         return boca + rect + semi;
     }
 
-    // Área neta disponible para conductores (solo el cuerpo, sin boca ni aislante)
+    // Área neta disponible para conductores (cuerpo de ranura menos aislantes)
+    // Descuenta: aislante de ranura perimetral + separador inter-capas
     function _slotBodyArea(type, d, t_ins) {
-        const t = t_ins || 0.30;
+        const t_wall  = t_ins || 0.30;  // Nomex de ranura por lado (mm)
+        const t_layer = 0.25;           // Nomex inter-capas (mm)
         let bw, hw;
         if (type === 'rect') {
             bw = d.bw; hw = d.hw;
@@ -414,21 +444,28 @@
         } else {
             bw = d.bw || d.hw; hw = d.hw;
         }
-        const A_body = bw * hw;
-        const A_iso  = 2 * t * (bw + hw);
-        return Math.max(1, A_body - A_iso);
+        const A_body      = bw * hw;
+        // El Nomex de ranura recubre 3 lados del cuerpo: los 2 laterales (hw) y el fondo (bw).
+        // La boca ya está protegida por el cuello b1×h1, que no aloja conductores.
+        const A_iso_wall  = t_wall  * (2 * hw + bw);   // aislante perimetral (3 lados)
+        const A_iso_layer = t_layer * bw;               // separador inter-capas
+        return Math.max(1, A_body - A_iso_wall - A_iso_layer);
     }
 
     // ── Longitud media de vuelta (MTL) real ───────────────────────────────────
     // La cabeza de bobina sigue el paso de bobina (y ranuras), no el paso polar.
     // Cuerda = 2 × (D_bore/2 + h_slot/2) × sin(π × y / Q) — arco de círculo
-    // Extensión por lado ≈ cuerda × 1.15 (extra por dobleces y salida)
-    function _computeMTL(D_bore_mm, L_stack_mm, h_slot_mm, Q, y) {
+    // Factor de extensión: 1.15 para paso pleno, 1.10 para paso corto.
+    // tau_p = paso polar en ranuras (opcional; si se omite se asume paso pleno).
+    function _computeMTL(D_bore_mm, L_stack_mm, h_slot_mm, Q, y, tau_p) {
         const R_mid_m = (D_bore_mm + h_slot_mm) / 2 / 1000;   // radio al centro de ranura
         const chord_m = 2 * R_mid_m * Math.sin(Math.PI * y / Q); // cuerda del paso de bobina
         const L_m = L_stack_mm / 1000;
-        // 2 lados activos + 2 cabezas (cada cabeza ≈ cuerda × 1.15)
-        return 2 * L_m + 2 * chord_m * 1.15;
+        // Factor cabeza: interpolado entre 1.10 (paso corto) y 1.15 (paso pleno)
+        const beta = (tau_p && tau_p > 0) ? Math.min(1, y / tau_p) : 1.0;
+        const headFactor = 1.10 + 0.05 * beta;
+        // 2 lados activos + 2 cabezas
+        return 2 * L_m + 2 * chord_m * headFactor;
     }
 
     // =========================================================================
@@ -477,6 +514,19 @@
                 warnings.push(`Bobinado fraccionario (q = ${q.toFixed(3)}). Válido pero poco común.`);
         }
 
+        // Verificar compatibilidad potencia ↔ carcasa.
+        // Heurística: ratio = (A_slot_net × Q) / (2 × I_line). Si este ratio es muy alto
+        // (carcasa sobredimensionada) el cálculo de vueltas dará N_c imposible de bobinar.
+        // Para motores IE2 trifásicos >2kW: ratio típico = 25–65. Arriba de 70 → desajuste.
+        if (p.motorType === 'three' && p.slotDims && p.powerKW > 2.0 && p.V && p.eta && p.cosfi) {
+            const A_sn = _slotBodyArea(p.slotType || 'rect', p.slotDims);
+            const I_line_est = (p.powerKW * 1000) / (Math.sqrt(3) * p.V * p.eta * p.cosfi);
+            const ratio = (A_sn * p.Q) / (2 * I_line_est);
+            if (ratio > 70) {
+                warnings.push(`Posible incompatibilidad carcasa/potencia: la ranura parece sobredimensionada para ${p.powerKW.toFixed(1)} kW (${I_line_est.toFixed(1)} A). Verifique que la carcasa seleccionada corresponde a la potencia del motor — puede estar usando datos de un motor más grande.`);
+            }
+        }
+
         return { ok: errors.length === 0, errors, warnings };
     }
 
@@ -515,23 +565,109 @@
         }
 
         // Si la corriente supera AWG 10, calcular hilos en paralelo.
-        // Preferir AWG 14–18 para que los hilos sean manejables en el bobinado.
         const PREFERRED_AWG = [14, 15, 16, 17, 18];
         let best = null;
         for (const awg of PREFERRED_AWG) {
             if (!awgTable[awg]) continue;
             const n = Math.ceil(reqArea / awgTable[awg].area);
-            if (n <= 8) {  // máximo práctico en mano: 8 conductores paralelos
+            if (n <= 8) {
                 best = { awg, area: awgTable[awg].area * n, diameter: awgTable[awg].diameter, n_parallel: n };
                 break;
             }
         }
-        // Fallback: AWG 10 con tantos paralelos como haga falta
         if (!best) {
             const n = Math.ceil(reqArea / awgTable[10].area);
             best = { awg: 10, area: awgTable[10].area * n, diameter: awgTable[10].diameter, n_parallel: n };
         }
         return best;
+    }
+
+    // Selecciona el calibre óptimo considerando el llenado de ranura.
+    // Dado N_c y A_slot_net, busca el hilo más grueso (mejor J) tal que Ku ≤ KU_MAX.
+    // Si un solo hilo no cumple, prueba subdividir en 2, 3... hilos más finos en paralelo
+    // (misma área de cobre total, menor diámetro por hilo → menor área esmaltada).
+    function _selectWireForSlot(I, J_max, N_c, A_slot_net, KU_MAX) {
+        const KU = KU_MAX || 0.55;
+        // Ku = (2 × N_c × np × A_esm) / A_slot_net  ≤ KU_MAX
+        // A_esm = π/4 × (d_cu + 0.05)²
+        // Para cada np, el conductor más grueso que cabe en ranura sin exceder Ku
+        // y que simultáneamente satisface J = I / (area × np) ≤ J_max.
+        const A_cond_max = KU * A_slot_net;   // mm² esmaltados totales disponibles
+
+        // Lista AWG de grueso (10) a fino (40) — orden correcto para buscar el mayor
+        // diámetro que cabe y cumple J
+        const list = [10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,32,34,36,38,40];
+        const reqCuArea = I / J_max;           // mm² de cobre mínimos para J
+
+        for (let np = 1; np <= 6; np++) {
+            // Diámetro de cobre máximo permitido por restricción Ku:
+            const A_esm_per_wire = A_cond_max / (2 * N_c * np);
+            const d_esm_max = Math.sqrt(4 * A_esm_per_wire / Math.PI);
+            const d_cu_max = d_esm_max - 0.05;
+            if (d_cu_max <= 0) continue;
+
+            // Buscar el AWG más GRUESO cuyo diámetro ≤ d_cu_max Y área×np ≥ reqCuArea
+            // Iterar de AWG grueso (i=0) a fino (i=length-1):
+            // el primer AWG que cabe y cumple J es el óptimo (mayor sección, menor J).
+            for (let i = 0; i < list.length; i++) {
+                const awg = list[i];
+                const w = awgTable[awg];
+                if (!w) continue;
+                if (w.diameter > d_cu_max) continue;         // no cabe en la ranura
+                if (w.area * np < reqCuArea * 0.98) continue; // J insuficiente
+                return { awg, area: w.area * np, diameter: w.diameter, n_parallel: np };
+            }
+        }
+
+        // Fallback: no existe combinación Ku≤KU_MAX + J≤J_max.
+        // Devolver la combinación de menor Ku real posible que sí cumple J,
+        // evaluando todas las combinaciones np×AWG y eligiendo la de menor Ku.
+        let best = null;
+        let bestKu = Infinity;
+        for (let np = 1; np <= 6; np++) {
+            const cu_min_per_wire = reqCuArea / np;
+            // AWG más fino que cumple J con este np (menor diámetro → menor Ku)
+            for (let i = list.length - 1; i >= 0; i--) {
+                const awg = list[i];
+                const w = awgTable[awg];
+                if (!w) continue;
+                if (w.area * np < reqCuArea * 0.98) continue;
+                const d_esm = w.diameter + 0.05;
+                const A_esm = Math.PI / 4 * d_esm * d_esm;
+                const ku = (2 * N_c * np * A_esm) / A_slot_net;
+                if (ku < bestKu) {
+                    bestKu = ku;
+                    best = { awg, area: w.area * np, diameter: w.diameter, n_parallel: np, kuExceeded: true };
+                }
+                break; // solo el más fino que cumple J para este np
+            }
+        }
+        if (best) return best;
+        return { awg: 10, area: awgTable[10].area, diameter: awgTable[10].diameter, n_parallel: 1, kuExceeded: true };
+    }
+
+    // Calcula el Ku real para una combinación dada (sin efectuar selección)
+    function _computeKu(N_c, awg, n_parallel, A_slot_net) {
+        const w = awgTable[awg];
+        if (!w) return 999;
+        const d_esm = w.diameter + 0.05;
+        const A_esm = Math.PI / 4 * d_esm * d_esm;
+        return (2 * N_c * n_parallel * A_esm) / A_slot_net;
+    }
+
+    // Busca el mejor wire que minimiza Ku para una corriente y N_c dados
+    function _bestWireForDelta(I_delta, J_max, N_c, A_slot_net) {
+        return _selectWireForSlot(I_delta, J_max, N_c, A_slot_net, 0.55);
+    }
+
+    // Calcula el N_c máximo para el que existe solución Ku ≤ KU_MAX con J ≤ J_max,
+    // probando valores decrecientes desde N_c_max hasta 1.
+    function _maxFeasibleNc(I, J_max, A_slot_net, N_c_start, KU_MAX) {
+        for (let nc = N_c_start; nc >= 1; nc--) {
+            const w = _selectWireForSlot(I, J_max, nc, A_slot_net, KU_MAX || 0.55);
+            if (!w.kuExceeded) return { N_c: nc, wire: w };
+        }
+        return null;
     }
 
     function _computeSlotDistrib(Q, P, m, y) {
@@ -672,15 +808,38 @@
 
         const V_phase = p.connection === 'star' ? V / Math.sqrt(3) : V;
 
-        // Flujo por polo
-        const tau_m   = Math.PI * (ID / 1000) / P;  // m
+        // Limitar Bav al máximo que no satura la corona (Bc ≤ 0.95 × Bsat)
+        // Bc = Phi / (2 × h_yoke × L × 0.97)  donde Phi = Bav × tau_m × L
+        // → Bc = Bav × tau_m / (2 × h_yoke × 0.97)
+        // → Bav_max = Bc_max × 2 × h_yoke × 0.97 / tau_m
+        const bsat     = p.steel ? p.steel.bsat : 1.8;
+        const h_yoke_m = ((p.D_ext_mm - ID) / 2 - (d.hw || 18) - (d.h1 || 1)) / 1000; // m
+        const tau_m_lim = Math.PI * (ID / 1000) / P;   // m
+        const Bc_max   = bsat * 0.90;  // 90% de Bsat como límite seguro
+        const Bav_max_byoke = h_yoke_m > 0
+            ? (Bc_max * 2 * h_yoke_m * 0.97) / tau_m_lim
+            : p.Bav;
+        // También limitar por Bt: Bt = Bav × τ_bore / (b_tooth × 0.97)
+        // b_tooth = τ_bore - b1 (mm)
+        const tau_bore_mm  = Math.PI * ID / p.Q;
+        const b_tooth_bore = Math.max(0.5, tau_bore_mm - (d.b1 || 3));
+        const Bav_max_btooth = (bsat * 0.90 * b_tooth_bore * 0.97) / tau_bore_mm;
+        // Bav efectivo: el menor entre el ingresado y los dos límites físicos
+        const Bav_eff = Math.min(p.Bav, Bav_max_byoke, Bav_max_btooth);
+
+        // Flujo por polo usando Bav efectivo
+        const tau_m   = tau_m_lim;
         const tau_m_mm = tau_m * 1000;
-        const Phi     = p.Bav * tau_m * (L / 1000);  // Wb
+        const Phi     = Bav_eff * tau_m * (L / 1000);  // Wb
 
         // Vueltas por fase
-        const N_ph_raw        = V_phase / (4.44 * f * Phi * Kw);
-        const groups_per_phase = (P / 2) * q_int;
-        const N_c  = Math.max(1, Math.ceil(N_ph_raw / groups_per_phase));
+        // Método del PDF "Calculo bobinados trifasicos":
+        //   Z (vueltas/bobina) = Zf × 3 / N  →  N_c = N_ph / (Q/3)
+        // Con doble capa y k1=1 (todo en serie), hay Q/3 bobinas en serie por fase.
+        // groups_per_phase = Q / (3 × k1) con k1=1 → Q/3
+        const N_ph_raw = V_phase / (4.44 * f * Phi * Kw);
+        const groups_per_phase = Math.round(p.Q / 3);   // bobinas en serie por fase (k1=1)
+        const N_c  = Math.max(1, Math.round(N_ph_raw / groups_per_phase));
         const N_ph = N_c * groups_per_phase;
 
         // Verificación FEM
@@ -690,15 +849,15 @@
         const I_line  = (p.powerKW * 1000) / (Math.sqrt(3) * V * p.eta * p.cosfi);
         const I_phase = p.connection === 'star' ? I_line : I_line / Math.sqrt(3);
 
-        // AWG — con soporte de hilos en paralelo para alta potencia
-        const J_max  = J_MAX[p.insClass] || 5.0;
-        const wire   = _selectWire(I_phase, J_max);
-        // J_real se calcula sobre el área total (todos los conductores en paralelo)
+        // AWG — selección con verificación de llenado de ranura
+        const J_max      = _jMaxForPower(p.powerHP || p.powerKW * 1.341, p.insClass);
+        const A_slot_net_pre = _slotBodyArea(p.slotType, d);
+        const wire   = _selectWireForSlot(I_phase, J_max, N_c, A_slot_net_pre, 0.55);
         const J_real = I_phase / wire.area;
 
         // Longitud media de vuelta real (basada en paso de bobina, no paso polar)
         const h_slot = d.hw + (d.h1 || 1);
-        const MTL = _computeMTL(ID, L, h_slot, p.Q, y);
+        const MTL = _computeMTL(ID, L, h_slot, p.Q, y, tau_p);
 
         // Cable y cobre — masa calculada por conductor individual × n_parallel
         const l_total = N_ph * MTL;
@@ -711,9 +870,13 @@
 
         // Factor de llenado real
         const A_slot = _slotArea(p.slotType, d);  // mm² (total geométrico)
-        const A_slot_net = _slotBodyArea(p.slotType, d);  // mm² (cuerpo neto sin aislante)
-        // Conductores en ranura: 2 capas × N_c vueltas × área real × factor esmalte 1.05
-        const A_cond = 2 * N_c * wire.area * 1.05;
+        const A_slot_net = _slotBodyArea(p.slotType, d);  // mm² (cuerpo neto sin aislantes)
+        // Área física de un hilo esmaltado = π/4 × (d_cobre + Δesmalte)²
+        // Δesmalte ≈ 0.05 mm por lado para grado 1 (single build, AWG 10–30)
+        const d_esm = wire.diameter + 0.05;  // mm, diámetro esmaltado
+        const A_wire_esm = Math.PI / 4 * d_esm * d_esm;  // mm²
+        // En ranura de 2 capas: N_c conductores por capa × 2 capas
+        const A_cond = 2 * N_c * A_wire_esm * wire.n_parallel;
         const Ku = A_cond / A_slot_net;
 
         // Volúmenes y masas del núcleo
@@ -721,8 +884,11 @@
         const { B_tooth, b_tooth, A_tooth, B_yoke, h_yoke, A_yoke } = _fluxDensities(p, Phi, cv);
         const { Pfe, Pfe_tooth_wkg, Pfe_yoke_wkg } = _coreLoss(p, B_tooth, B_yoke, cv);
 
-        // Densidad de flujo en la corona
-        const eta_calc = p.powerKW * 1000 / (p.powerKW * 1000 + Pcu_total + Pfe);
+        // Pérdidas mecánicas (fricción+ventilación) y pérdidas adicionales (dispersión):
+        // Típicamente ~1.5% de Pn para pérdidas mec. y ~0.5% para adicionales en motores IE2
+        const Pmec  = p.powerKW * 1000 * 0.015;   // W — fricción + ventilación
+        const Padd  = p.powerKW * 1000 * 0.005;   // W — pérdidas adicionales (load losses)
+        const eta_calc = p.powerKW * 1000 / (p.powerKW * 1000 + Pcu_total + Pfe + Pmec + Padd);
 
         // Distribución de ranuras
         const slotTable = _computeSlotDistrib(p.Q, P, m, y);
@@ -739,24 +905,100 @@
             W: 1 + 2 * slots_per_phase_group,
         };
 
-        // Conexión de grupos dentro de cada fase
-        // Si groups_per_phase es par → series (F-P-F-P) o paralelo (F-F / P-P)
-        // Criterio: si I_phase > 15 A conviene paralelo para facilitar el bobinado
-        const groups_connection = (groups_per_phase > 2 && I_phase > 15) ? 'paralelo' : 'serie';
+        // Tipo de conexión de grupos dentro de cada fase.
+        // Para I_phase > 15A con más de 2 polos conviene paralelo para reducir corriente por grupo.
+        const groups_connection = (P > 2 && I_phase > 15) ? 'paralelo' : 'serie';
 
         // Advertencias
         const postWarnings = [];
-        if (J_real > J_max)              postWarnings.push(`J = ${J_real.toFixed(2)} A/mm² supera límite clase ${p.insClass} (${J_max} A/mm²). Use calibre mayor.`);
-        else if (J_real > J_max * 0.92)  postWarnings.push(`J = ${J_real.toFixed(2)} A/mm² cercana al límite de clase ${p.insClass}.`);
-        if (wire.n_parallel > 1)         postWarnings.push(`Corriente elevada: usar ${wire.n_parallel} hilos AWG ${wire.awg} en paralelo (en mano) por bobina.`);
-        if (Ku > 0.55)                   postWarnings.push(`Llenado de ranura Ku = ${(Ku*100).toFixed(0)}% > 55%. Bobinado muy difícil o imposible.`);
-        else if (Ku > 0.45)              postWarnings.push(`Llenado de ranura Ku = ${(Ku*100).toFixed(0)}% > 45%. Bobinado manual difícil.`);
-        if (N_c < 3)                     postWarnings.push('Muy pocas vueltas por bobina (< 3). Revise Bav o dimensiones del estátor.');
-        if (N_c > 400)                   postWarnings.push('Muchas vueltas por bobina (> 400). Revise los parámetros.');
+        // Informar si Bav fue limitado automáticamente
+        if (Bav_eff < p.Bav - 0.005) {
+            postWarnings.push(
+                `Bav reducido automáticamente de ${p.Bav.toFixed(3)} T a ${Bav_eff.toFixed(3)} T ` +
+                `para evitar saturación (Bc_max=${Bc_max.toFixed(2)} T, h_yoke=${(h_yoke_m*1000).toFixed(1)} mm). ` +
+                `Si necesita Bav más alto, aumente OD o reduzca hw.`
+            );
+        }
+        if (J_real > J_max)              postWarnings.push(`J = ${J_real.toFixed(2)} A/mm² supera límite (${J_max.toFixed(1)} A/mm²). Use calibre mayor.`);
+        else if (J_real > J_max * 0.92)  postWarnings.push(`J = ${J_real.toFixed(2)} A/mm² cercana al límite (${J_max.toFixed(1)} A/mm²).`);
+        if (wire.n_parallel > 1 && !wire.kuExceeded)  postWarnings.push(`Corriente elevada: usar ${wire.n_parallel} hilos AWG ${wire.awg} en paralelo (en mano) por bobina.`);
+        // Detectar si Ku alto es consecuencia de corona fina (By limita Bav, que dispara N_c)
+        const h_yoke_check = (p.D_ext_mm - p.D_bore_mm) / 2 - (d.hw || 18) - (d.h1 || 1);
+        const byLimitsKu = Ku > 0.55 && B_yoke > p.steel.bsat * 0.75;
+        if (Ku > 0.55) {
+            if (byLimitsKu) {
+                postWarnings.push(`Llenado Ku = ${(Ku*100).toFixed(0)}% — CAUSA RAÍZ: corona demasiado delgada (h_yoke=${h_yoke_check.toFixed(1)} mm). `
+                    + `La corona saturada (Bc=${B_yoke.toFixed(2)} T) obliga a bajar Bav, lo que dispara las vueltas. `
+                    + `Solución: usar núcleo de mayor diámetro exterior (OD) o reducir la profundidad de ranura (hw).`);
+            } else {
+                // Analizar si cambiar a triángulo resuelve el problema de llenado
+                const connActual = p.connection;
+                const I_delta = I_line / Math.sqrt(3);   // corriente de fase en Δ
+                const I_star  = I_line;                   // corriente de fase en Y
+                const wireForDelta = _bestWireForDelta(I_delta, J_max, N_c, A_slot_net_pre);
+                const Ku_delta = _computeKu(N_c, wireForDelta.awg, wireForDelta.n_parallel, A_slot_net_pre);
+                const Ku_star  = Ku;   // ya calculado para conexión actual
+
+                // Calcular N_c máximo factible para cada conexión
+                const feasY = _maxFeasibleNc(I_star, J_max, A_slot_net_pre, N_c, 0.55);
+                const feasD = _maxFeasibleNc(I_delta, J_max, A_slot_net_pre, N_c, 0.55);
+
+                let diagMsg = `Llenado de ranura Ku = ${(Ku_star*100).toFixed(0)}% > 55% con conexión ${connActual === 'star' ? 'Estrella (Y)' : 'Triángulo (Δ)'}. `;
+                if (connActual === 'star') {
+                    const npTxt = wireForDelta.n_parallel > 1 ? ` ×${wireForDelta.n_parallel}` : '';
+                    diagMsg += `Con Triángulo (Δ): I_fase=${I_delta.toFixed(2)} A → AWG ${wireForDelta.awg}${npTxt}, Ku=${(Ku_delta*100).toFixed(0)}%. `;
+                    if (Ku_delta <= 0.55) {
+                        diagMsg += `✓ Cambie a TRIÁNGULO (Δ) para que el bobinado sea factible.`;
+                    } else {
+                        // Indicar N_c máximo factible para cada conexión
+                        if (feasY) {
+                            const npy = feasY.wire.n_parallel > 1 ? ` ×${feasY.wire.n_parallel}` : '';
+                            diagMsg += `Estrella (Y): N_c máximo factible = ${feasY.N_c} vueltas/bobina (AWG ${feasY.wire.awg}${npy}). `;
+                        }
+                        if (feasD) {
+                            const npd = feasD.wire.n_parallel > 1 ? ` ×${feasD.wire.n_parallel}` : '';
+                            diagMsg += `Triángulo (Δ): N_c máximo factible = ${feasD.N_c} vueltas/bobina (AWG ${feasD.wire.awg}${npd}). `;
+                        }
+                        if (!feasY && !feasD) {
+                            diagMsg += `Ranura demasiado pequeña para esta corriente con cualquier N_c. Verifique dimensiones de ranura o use núcleo de mayor diámetro exterior.`;
+                        } else {
+                            diagMsg += `Para reducir N_c aumente Bav en los parámetros de entrada.`;
+                        }
+                    }
+                } else {
+                    const wireForStar = _bestWireForDelta(I_star, J_max, N_c, A_slot_net_pre);
+                    const Ku_starAlt = _computeKu(N_c, wireForStar.awg, wireForStar.n_parallel, A_slot_net_pre);
+                    diagMsg += `En Estrella (Y) sería peor: Ku=${(Ku_starAlt*100).toFixed(0)}%. `;
+                    if (feasD) {
+                        const npd = feasD.wire.n_parallel > 1 ? ` ×${feasD.wire.n_parallel}` : '';
+                        diagMsg += `Triángulo (Δ): N_c máximo factible = ${feasD.N_c} vueltas/bobina (AWG ${feasD.wire.awg}${npd}). Para reducir N_c aumente Bav.`;
+                    } else {
+                        diagMsg += `Ranura demasiado pequeña. Verifique dimensiones o use núcleo mayor.`;
+                    }
+                }
+                postWarnings.push(diagMsg);
+            }
+        } else if (Ku > 0.45) {
+            postWarnings.push(`Llenado de ranura Ku = ${(Ku*100).toFixed(0)}% > 45%. Bobinado manual difícil.`);
+        }
+        if (N_c < 3)    postWarnings.push('Muy pocas vueltas por bobina (< 3). Revise Bav o dimensiones del estátor.');
+        if (N_c > 400)  postWarnings.push('Muchas vueltas por bobina (> 400). Revise los parámetros.');
         if (B_tooth > p.steel.bsat * 0.95) postWarnings.push(`Densidad en el diente Bt = ${B_tooth.toFixed(3)} T se acerca a la saturación (${p.steel.bsat} T).`);
         if (B_yoke  > p.steel.bsat * 0.85) postWarnings.push(`Densidad en la corona Bc = ${B_yoke.toFixed(3)} T es elevada.`);
         const ratio = E_verify / V_phase;
         if (Math.abs(ratio - 1) > 0.07)  postWarnings.push(`FEM calculada E = ${E_verify.toFixed(1)} V vs V_fase = ${V_phase.toFixed(1)} V (${((ratio-1)*100).toFixed(1)}%). Ajuste Bav.`);
+
+        // Escenario alternativo: si Ku > 55%, calcular cómo quedaría en la conexión opuesta
+        let deltaScenario = null;
+        if (Ku > 0.55) {
+            const I_alt = p.connection === 'star' ? I_line / Math.sqrt(3) : I_line;
+            const connAlt = p.connection === 'star' ? 'delta' : 'star';
+            const wireAlt = _bestWireForDelta(I_alt, J_max, N_c, A_slot_net_pre);
+            const Ku_alt  = _computeKu(N_c, wireAlt.awg, wireAlt.n_parallel, A_slot_net_pre);
+            const feasCurr = _maxFeasibleNc(I_phase, J_max, A_slot_net_pre, N_c, 0.55);
+            const feasAlt  = _maxFeasibleNc(I_alt,   J_max, A_slot_net_pre, N_c, 0.55);
+            deltaScenario = { connection: connAlt, I_phase: I_alt, wire: wireAlt, Ku: Ku_alt, feasCurr, feasAlt };
+        }
 
         return {
             motorType: 'three', P, n_sync, slip, m,
@@ -772,11 +1014,12 @@
             Pfe, Pfe_tooth_wkg, Pfe_yoke_wkg,
             eta_calc, cv,
             slotTable, postWarnings,
+            deltaScenario,
             groups_per_phase, connection: p.connection,
             winding_step, phase_starts, groups_connection,
             insClass: p.insClass, Q: p.Q, f, V,
             D_ext_mm: p.D_ext_mm, D_mm: p.D_bore_mm, L_mm: p.L_stack_mm,
-            Bav: p.Bav, pitchType: p.pitchType,
+            Bav: Bav_eff, pitchType: p.pitchType,
             slotType: p.slotType, slotDims: p.slotDims,
             steel: p.steel, powerKW: p.powerKW,
             existAWG: p.existAWG, existTurns: p.existTurns,
@@ -810,17 +1053,17 @@
 
         const N_ph_raw_m = V / (4.44 * f * Phi * Kw_m);
         const grp_m      = (P / 2) * q_main;
-        const N_c_m      = Math.max(1, Math.ceil(N_ph_raw_m / grp_m));
+        const N_c_m      = Math.max(1, Math.round(N_ph_raw_m / grp_m));
         const N_ph_m     = N_c_m * grp_m;
         const E_verify_m = 4.44 * f * Phi * Kw_m * N_ph_m;
 
         const I_main  = (p.powerKW * 1000) / (V * p.eta * p.cosfi);
-        const J_max   = J_MAX[p.insClass] || 5.0;
+        const J_max   = _jMaxForPower(p.powerHP || p.powerKW * 1.341, p.insClass);
         const wire_m  = _selectWire(I_main, J_max);
         const J_real_m = I_main / wire_m.area;
 
         const h_slot = d.hw + (d.h1 || 1);
-        const MTL    = _computeMTL(ID, L, h_slot, p.Q, y_main);
+        const MTL    = _computeMTL(ID, L, h_slot, p.Q, y_main, tau_p);
 
         const l_m   = N_ph_m * MTL;
         const area_single_m = wire_m.area / wire_m.n_parallel;
@@ -835,7 +1078,7 @@
         const { Kd: Kd_a, Kp: Kp_a, Kw: Kw_a } = _computeKw(Q_aux, P, q_aux, y_aux, tau_p);
 
         const grp_a        = Math.max(1, (P / 2) * q_aux);
-        const N_c_a        = Math.max(1, Math.ceil(N_ph_m * p.auxRatio / grp_a));
+        const N_c_a        = Math.max(1, Math.round(N_ph_m * p.auxRatio / grp_a));
         const N_ph_a       = N_c_a * grp_a;
         const isContinuous = p.startMethod === 'cap_run';
         const J_aux_max    = isContinuous ? J_max : Math.min(8.0, J_max * 1.6);
@@ -854,11 +1097,15 @@
             C_uF = 1e6 / (2 * Math.PI * f * X_C);
         }
 
-        // Factor de llenado
+        // Factor de llenado (área esmaltada real del conductor)
         const A_slot     = _slotArea(p.slotType, d);
         const A_slot_net = _slotBodyArea(p.slotType, d);
-        const Ku_m = (2 * N_c_m * wire_m.area * 1.05) / A_slot_net;
-        const Ku_a = (2 * N_c_a * wire_a.area * 1.05) / A_slot_net;
+        const d_esm_m = wire_m.diameter + 0.05;
+        const A_wire_esm_m = Math.PI / 4 * d_esm_m * d_esm_m;
+        const d_esm_a = wire_a.diameter + 0.05;
+        const A_wire_esm_a = Math.PI / 4 * d_esm_a * d_esm_a;
+        const Ku_m = (2 * N_c_m * A_wire_esm_m * wire_m.n_parallel) / A_slot_net;
+        const Ku_a = (2 * N_c_a * A_wire_esm_a * wire_a.n_parallel) / A_slot_net;
 
         // Núcleo
         const cv = _coreVolumes(p);
@@ -1108,8 +1355,10 @@
         // Pero N_c depende del nuevo Bav (que optimizará el sweep), así que estimamos con N_c actual
         const { r: r0 } = _evalFitness(p0);
         const bw_curr = d0.bw || d0.btop || 5.5;
-        const A_iso_fix = 2 * 0.30 * (bw_curr + (d0.hw || 18));
-        const A_cond_curr = 2 * r0.N_c * r0.wire.area * 1.05;
+        const A_iso_fix = 0.30 * (2 * (d0.hw || 18) + bw_curr);
+        const d_esm_curr = r0.wire.diameter + 0.05;
+        const A_wire_esm_curr = Math.PI / 4 * d_esm_curr * d_esm_curr;
+        const A_cond_curr = 2 * r0.N_c * A_wire_esm_curr * (r0.wire.n_parallel || 1);
         const A_net_needed = A_cond_curr / 0.48;
         const hw_for_ku   = Math.ceil((A_net_needed + A_iso_fix) / bw_curr);
 
@@ -1251,7 +1500,9 @@
         const { r: r_est } = _evalFitness(p0);
         const A_slot_net   = _slotBodyArea(p0.slotType, d0);
         const A_cond_max   = A_slot_net * 0.50;
-        const area_wire_max = A_cond_max / (2 * r_est.N_c * 1.05);
+        const d_esm_est = (r_est.wire.diameter + 0.05);
+        const area_wire_esm_est = Math.PI / 4 * d_esm_est * d_esm_est;
+        const area_wire_max = A_cond_max / (2 * r_est.N_c * (r_est.wire.n_parallel || 1)) * (r_est.wire.area / area_wire_esm_est);
         const I_max_admisible = area_wire_max * 6.0;
         const P_kW_max = p0.motorType === 'three'
             ? I_max_admisible * p0.V * Math.sqrt(3) * p0.eta * p0.cosfi / 1000
@@ -1485,6 +1736,7 @@
         _displayResults(r);
         _drawStator(r);
         _drawSlotLinear(r);
+        _drawConnDiagram(r);
         const badge = document.getElementById('bav_calc_badge');
         if (badge) badge.style.display = 'inline-block';
 
@@ -1651,6 +1903,7 @@
         _displayResults(results);
         _drawStator(results);
         _drawSlotLinear(results);
+        _drawConnDiagram(results);
         // Ocultar resultado de optimización anterior al recalcular manualmente
         const optEl = document.getElementById('motorOptimResult');
         if (optEl) { optEl.innerHTML = ''; optEl.style.display = 'none'; }
@@ -1728,7 +1981,7 @@
         html += _hdr(mainLabel);
         html += _itm('Vueltas por fase (N_ph)', r.N_ph, '');
         html += _itm('Vueltas por bobina (N_c)', r.N_c, '');
-        html += _itm('Grupos por fase', r.groups_per_phase || (r.P/2)*r.q_int, 'grupos');
+        html += _itm('Bobinas por fase', r.groups_per_phase || (r.P * (r.q_int||1)), `bobinas en serie (Q/3 = ${r.Q}/3, k₁=1 rama, doble capa)`);
         if (r.motorType === 'three') {
             html += _itm('Corriente de línea', r.I_line.toFixed(3), 'A');
             html += _itm('Corriente de fase', r.I_phase.toFixed(3), 'A');
@@ -1764,12 +2017,57 @@
         html += _itm('Tipo de ranura', slotTypeNames[r.slotType] || r.slotType, '');
         html += _itm('Área bruta de ranura', r.A_slot.toFixed(2), 'mm²');
         html += _itm('Área neta (sin aislante)', r.A_slot_net.toFixed(2), 'mm²');
-        html += _itm('Área conductores (2 capas)', r.A_cond ? r.A_cond.toFixed(2) : (2*r.N_c*r.wire.area*1.05).toFixed(2), 'mm²');
+        html += _itm('Área conductores (2 capas)', r.A_cond ? r.A_cond.toFixed(2) : (2*r.N_c*(Math.PI/4*Math.pow(r.wire.diameter+0.05,2))*(r.wire.n_parallel||1)).toFixed(2), 'mm²');
         const kuClass = r.Ku > 0.55 ? 'error' : r.Ku > 0.45 ? 'warning' : 'success';
         html += _itm('Factor de llenado Ku', (r.Ku * 100).toFixed(1), '%', kuClass);
         if (r.motorType === 'single' && r.aux) {
             const kuaClass = r.aux.Ku > 0.55 ? 'error' : r.aux.Ku > 0.45 ? 'warning' : 'success';
             html += _itm('Ku auxiliar', (r.aux.Ku * 100).toFixed(1), '%', kuaClass);
+        }
+        // Cuadro comparativo estrella vs delta cuando Ku > 55%
+        if (r.deltaScenario) {
+            const ds = r.deltaScenario;
+            const connNameCurr = r.connection === 'star' ? 'Estrella (Y)' : 'Triángulo (Δ)';
+            const connNameAlt  = ds.connection === 'star' ? 'Estrella (Y)' : 'Triángulo (Δ)';
+            const npAlt = ds.wire.n_parallel > 1 ? ` ×${ds.wire.n_parallel} hilos` : '';
+            const kuAltClass = ds.Ku > 0.55 ? 'error' : ds.Ku > 0.45 ? 'warning' : 'success';
+            html += `<div style="margin:8px 0 4px;padding:10px 14px;border-left:4px solid #f59e0b;background:#fffbeb;border-radius:4px;">
+                <div style="font-weight:600;color:#92400e;margin-bottom:6px;">Comparación de conexiones (mismas vueltas N_c=${r.N_c})</div>
+                <table style="width:100%;font-size:0.88em;border-collapse:collapse;">
+                    <tr style="border-bottom:1px solid #fde68a;">
+                        <th style="text-align:left;padding:3px 8px;color:#78350f;">Conexión</th>
+                        <th style="text-align:right;padding:3px 8px;color:#78350f;">I_fase</th>
+                        <th style="text-align:right;padding:3px 8px;color:#78350f;">Conductor</th>
+                        <th style="text-align:right;padding:3px 8px;color:#78350f;">Ku</th>
+                    </tr>
+                    <tr style="background:#fef3c7;">
+                        <td style="padding:3px 8px;font-weight:600;">${connNameCurr} ← actual</td>
+                        <td style="text-align:right;padding:3px 8px;">${r.I_phase.toFixed(2)} A</td>
+                        <td style="text-align:right;padding:3px 8px;">AWG ${r.wire.awg}${r.wire.n_parallel > 1 ? ' ×' + r.wire.n_parallel : ''}</td>
+                        <td style="text-align:right;padding:3px 8px;font-weight:700;color:${r.Ku>0.55?'#dc2626':r.Ku>0.45?'#d97706':'#16a34a'};">${(r.Ku*100).toFixed(0)}%</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:3px 8px;">${connNameAlt}</td>
+                        <td style="text-align:right;padding:3px 8px;">${ds.I_phase.toFixed(2)} A</td>
+                        <td style="text-align:right;padding:3px 8px;">AWG ${ds.wire.awg}${npAlt}</td>
+                        <td style="text-align:right;padding:3px 8px;font-weight:700;color:${ds.Ku>0.55?'#dc2626':ds.Ku>0.45?'#d97706':'#16a34a'};">${(ds.Ku*100).toFixed(0)}%</td>
+                    </tr>
+                </table>
+                ${ds.Ku <= 0.55
+                    ? `<div style="margin-top:6px;color:#065f46;font-weight:600;">✓ Use conexión ${connNameAlt} para Ku aceptable.</div>`
+                    : (() => {
+                        let extra = '';
+                        if (ds.feasCurr) {
+                            const np = ds.feasCurr.wire.n_parallel > 1 ? ` ×${ds.feasCurr.wire.n_parallel}` : '';
+                            extra += `<br>${connNameCurr}: N_c máx = <b>${ds.feasCurr.N_c}</b> vueltas → AWG ${ds.feasCurr.wire.awg}${np}, Ku≤55%. `;
+                        }
+                        if (ds.feasAlt) {
+                            const np = ds.feasAlt.wire.n_parallel > 1 ? ` ×${ds.feasAlt.wire.n_parallel}` : '';
+                            extra += `<br>${connNameAlt}: N_c máx = <b>${ds.feasAlt.N_c}</b> vueltas → AWG ${ds.feasAlt.wire.awg}${np}, Ku≤55%. `;
+                        }
+                        return `<div style="margin-top:6px;color:#92400e;">Ninguna conexión logra Ku ≤ 55% con N_c=${r.N_c} vueltas.${extra}${extra ? '<br>Para reducir N_c aumente Bav.' : ' Verifique el área de ranura o los datos del motor original.'}</div>`;
+                    })()}
+            </div>`;
         }
 
         // ── 6. PÉRDIDAS EN EL NÚCLEO ──────────────────────────────────────────
@@ -1822,7 +2120,7 @@
                 ? 'Paralelo (F-F / I-I) — corriente alta'
                 : 'Serie (F-I / F-I) — configuración estándar', '',
                 r.groups_connection === 'paralelo' ? 'warning' : 'success');
-            html += _itm('Grupos por fase', r.groups_per_phase, 'grupos');
+            html += _itm('Bobinas por fase', r.groups_per_phase, `bobinas en serie (Q/3 = ${r.Q}/3, k₁=1 rama, doble capa)`);
             const n_par_t = r.wire.n_parallel || 1;
             if (n_par_t > 1) {
                 html += `<div style="grid-column:1/-1;background:rgba(245,158,11,0.08);
@@ -1920,7 +2218,7 @@
         const steps = [
             `Verificar y registrar el estado del devanado original: fotografiar la distribución, anotar AWG original (${r.existAWG > 0 ? 'AWG ' + r.existAWG : 'no registrado'}) y vueltas/bobina (${r.existTurns > 0 ? r.existTurns : 'no registrado'}).`,
             `Retirar el bobinado quemado con cuidado de no dañar las ranuras. Limpiar las ranuras con cepillo metálico y soplete de aire a baja presión. Verificar que no haya chapas dañadas o deformadas.`,
-            `Preparar el aislante de ranura: cortar láminas de Nomex / Mylar de <strong>0.3–0.5 mm</strong>. Longitud = <strong>${(r.L_mm + 20).toFixed(0)} mm</strong> (paquete + 10 mm por cada lado). Insertar una lámina en cada una de las <strong>${r.Q} ranuras</strong>. Doblar los bordes para proteger la boca.`,
+            `Preparar el aislante de ranura clase <strong>${r.insClass}</strong>: usar Nomex ${r.insClass==='A'?'410 (105°C)':r.insClass==='B'?'410 (130°C)':r.insClass==='F'?'410 (155°C) o Nomex 411':'461 (220°C)'} de <strong>0.3–0.5 mm</strong>. Longitud = <strong>${(r.L_mm + 20).toFixed(0)} mm</strong> (paquete + 10 mm por cada lado). Insertar una lámina en cada una de las <strong>${r.Q} ranuras</strong>. Doblar los bordes para proteger la boca. Todo el sistema de aislamiento (Nomex, alambre, espagueti y barniz) debe ser uniformemente clase <strong>${r.insClass} o superior</strong>.`,
             `Confeccionar las bobinas con los siguientes parámetros:
              <ul style="margin:6px 0 0 16px;color:#cbd5e1;">
                <li>Vueltas por bobina: <strong>${r.N_c}</strong></li>
@@ -2086,36 +2384,43 @@
         const starts = [ps.U, ps.V, ps.W];
         const slotStep = Math.round(r.Q / (r.P * 3));  // ranuras por grupo
 
+        // gpf = P × q_int bobinas en serie. Para visualización en taller, agrupar
+        // las bobinas en P grupos de q bobinas cada uno (un grupo por polo por fase).
+        const P_groups = r.P;           // grupos físicos de polo = P
+        const q_per_group = r.q_int;   // bobinas por grupo = q
         return `<div style="margin-top:20px;">
             <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;
                 color:#0891b2;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid rgba(8,145,178,0.25);">
                 Diagrama de grupos y conexión — ${r.P} polos / ${conn}
             </div>
             <div style="font-size:11px;color:#94a3b8;margin-bottom:8px;">
-                ${gpf} grupos por fase · Conexión: ${r.groups_connection === 'paralelo' ? 'Paralelo (F-F / I-I)' : 'Serie (F-I / F-I — alternado)'}
+                ${P_groups} grupos de polo × ${q_per_group} bob/grupo = ${gpf} bobinas en serie · Conexión: ${r.groups_connection === 'paralelo' ? 'Paralelo (F-F / I-I)' : 'Serie (F-I / F-I — polos alternados)'}
             </div>
             ${phaseNames.map((ph, pi) => {
                 const col = ['#ef4444','#3b82f6','#10b981'][pi];
-                const groupSlots = Array.from({length: gpf}, (_, gi) =>
+                // Ranuras de inicio de cada GRUPO (P grupos por fase)
+                const groupSlots = Array.from({length: P_groups}, (_, gi) =>
                     ((starts[pi] - 1 + gi * slotStep * 2) % r.Q) + 1
                 );
+                const label = ph.split(' ')[0];
                 const connSteps = r.groups_connection === 'paralelo'
-                    ? `<li>Terminal entrada (${ph.split(' ')[0]}1): Inicio del Grupo 1</li>
-                       <li>Unir <strong>todos los Inicios</strong> juntos → terminal de línea ${ph.split(' ')[0]}1</li>
-                       <li>Unir <strong>todos los Finales</strong> juntos → terminal de neutro ${ph.split(' ')[0]}2</li>`
-                    : Array.from({length: gpf}, (_, i) => {
-                        if (i === 0) return `<li>Terminal entrada (${ph.split(' ')[0]}1): Inicio Grupo 1</li>`;
+                    ? `<li>Terminal entrada (${label}1): Inicio del Grupo 1</li>
+                       <li>Unir <strong>todos los Inicios</strong> juntos → terminal de línea ${label}1</li>
+                       <li>Unir <strong>todos los Finales</strong> juntos → terminal de salida ${label}2</li>`
+                    : Array.from({length: P_groups}, (_, i) => {
+                        if (i === 0) return `<li>Terminal entrada (${label}1): Inicio Grupo 1</li>`;
                         if (i % 2 === 1) return `<li>Unir Fin Grupo ${i} con Fin Grupo ${i+1}</li>`;
                         return `<li>Unir Inicio Grupo ${i} con Inicio Grupo ${i+1}</li>`;
-                      }).filter(Boolean).join('') + `<li>Terminal salida (${ph.split(' ')[0]}2): Inicio Grupo ${gpf}</li>`;
+                      }).filter(Boolean).join('') + `<li>Terminal salida (${label}2): Fin Grupo ${P_groups}</li>`;
                 return `<div style="background:rgba(0,0,0,0.15);border-left:3px solid ${col};border-radius:0 8px 8px 0;padding:10px 12px;margin-bottom:8px;">
                     <div style="font-size:11px;font-weight:700;color:${col};margin-bottom:6px;">Fase ${ph}</div>
-                    <div style="font-size:10px;color:#64748b;margin-bottom:4px;">Ranuras de inicio: ${groupSlots.join(', ')}</div>
+                    <div style="font-size:10px;color:#64748b;margin-bottom:4px;">Ranuras de inicio de cada grupo: ${groupSlots.join(', ')}</div>
                     <ol style="font-size:10px;color:#94a3b8;margin:0;padding-left:16px;line-height:1.8;">${connSteps}</ol>
                 </div>`;
             }).join('')}
             <div style="font-size:11px;color:#64748b;background:rgba(0,0,0,0.15);border-radius:6px;padding:8px 10px;margin-top:4px;">
-                <strong style="color:#22d3ee;">Centro de estrella (Y):</strong> Unir firmemente U2 + V2 + W2 en cortocircuito.<br>
+                <strong style="color:#22d3ee;">Centro de estrella (Y):</strong> Unir firmemente U2 + V2 + W2 en cortocircuito.
+                Los terminales U2, V2, W2 son el <strong>Fin del Grupo ${P_groups}</strong> de cada fase.<br>
                 <strong style="color:#22d3ee;">Triángulo (Δ):</strong> U1-W2 · V1-U2 · W1-V2.
             </div>
         </div>`;
@@ -2128,7 +2433,8 @@
     function _drawStator(r) {
         const canvas = document.getElementById('motorStatorCanvas');
         if (!canvas) return;
-        const W = Math.max(220, (canvas.parentElement?.clientWidth || 360) - 32);
+
+        const W = Math.max(260, (canvas.parentElement?.clientWidth || 380) - 32);
         canvas.width = canvas.height = W;
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, W, W);
@@ -2137,62 +2443,61 @@
         const OD = r.D_ext_mm, ID = r.D_mm;
         const Q  = r.Q;
         const d  = r.slotDims;
-        const h_slot = (d.hw + (d.h1 || 1));  // mm
+        const h_slot = (d.hw || 18) + (d.h1 || 1);
 
-        // Escalado: que el OD ocupe el 94% del canvas
-        const scale = (W * 0.47) / (OD / 2);  // px/mm
-
+        // OD ocupa 88% del canvas — sin margen para arcos
+        const scale   = (W * 0.44) / (OD / 2);
         const R_ext   = (OD / 2) * scale;
         const R_bore  = (ID / 2) * scale;
-        const R_slot_out = (ID / 2 + h_slot) * scale;
-        const R_rotor = (ID / 2 - 1.5) * scale;
+        const R_rotor = Math.max(4, R_bore - 2 * scale);
 
-        // Fondo del estátor (corona + dientes)
+        const PH_COL = {
+            A:    { fill: 'rgba(239,68,68,0.62)',   stroke: '#ef4444', label: '#fca5a5' },
+            B:    { fill: 'rgba(59,130,246,0.62)',  stroke: '#3b82f6', label: '#93c5fd' },
+            C:    { fill: 'rgba(16,185,129,0.62)',  stroke: '#10b981', label: '#6ee7b7' },
+            Aux:  { fill: 'rgba(245,158,11,0.62)',  stroke: '#f59e0b', label: '#fcd34d' },
+            empty:{ fill: 'rgba(255,255,255,0.03)', stroke: 'rgba(255,255,255,0.07)', label: '#475569' },
+        };
+
+        // 1. Fondo del estátor
         ctx.beginPath();
         ctx.arc(cx, cy, R_ext, 0, 2 * Math.PI);
-        ctx.fillStyle = 'rgba(51,65,85,0.45)';
+        ctx.fillStyle = 'rgba(30,41,59,0.80)';
         ctx.fill();
-        ctx.strokeStyle = 'rgba(148,163,184,0.3)';
+        ctx.strokeStyle = 'rgba(148,163,184,0.25)';
         ctx.lineWidth = 1.5;
         ctx.stroke();
 
-        // Dibujar ranuras con forma real según tipo
+        // 2. Ranuras con color de fase
+        const slotAngSpan = (2 * Math.PI / Q);
         for (let i = 0; i < Q; i++) {
-            const slot   = r.slotTable[i];
-            const phase  = slot ? slot.phase : 'empty';
-            const col    = PHASE_COLOR[phase] || PHASE_COLOR.empty;
-            const angle  = (2 * Math.PI * i / Q) - Math.PI / 2;
-
-            // Ranura representada como sector anular entre R_bore y R_slot_out
-            const tau_slot_rad = (2 * Math.PI / Q) * ((d.bw || 5.5) / (Math.PI * ID / Q));
-            const span = Math.min((2 * Math.PI / Q) * 0.78, tau_slot_rad);
+            const slot  = r.slotTable ? r.slotTable[i] : null;
+            const phase = slot ? slot.phase : 'empty';
+            const col   = PH_COL[phase] || PH_COL.empty;
+            const ang   = slotAngSpan * i - Math.PI / 2;
+            const h1_px = (d.h1 || 1) * scale;
+            const hw_px = (d.hw || 18) * scale;
+            const r_in  = R_bore;
+            const r_mid = R_bore + h1_px;
+            const r_out = R_bore + h1_px + hw_px;
+            const b1_ang = Math.min(slotAngSpan * 0.40,
+                ((d.b1 || 3) / (Math.PI * ID / Q)) * slotAngSpan);
+            const bw_ang = Math.min(slotAngSpan * 0.76,
+                ((d.bw || 5.5) / (Math.PI * ID / Q)) * slotAngSpan);
 
             ctx.save();
             ctx.translate(cx, cy);
-            ctx.rotate(angle);
+            ctx.rotate(ang);
 
-            // Boca de la ranura (estrecha)
-            const b1_px  = ((d.b1 || 3) / (Math.PI * ID / Q)) * (2 * Math.PI / Q) * R_bore / 2;
-            const h1_px  = (d.h1 || 1) * scale;
-            const bw_px  = span;  // ancho angular del cuerpo
-            const hw_px  = (d.hw || 18) * scale;
-
-            // Dibujar sección de ranura proyectada radialmente
-            const r_in   = R_bore;
-            const r_mid  = R_bore + h1_px;
-            const r_out  = R_bore + h1_px + hw_px;
-            const b1_ang = (d.b1 || 3) / (Math.PI * ID) * Math.PI;
-            const bw_ang = span;
-
-            // Boca
+            // Boca (oscura)
             ctx.beginPath();
             ctx.arc(0, 0, r_in,  -b1_ang/2, b1_ang/2);
             ctx.arc(0, 0, r_mid,  b1_ang/2, -b1_ang/2, true);
             ctx.closePath();
-            ctx.fillStyle = 'rgba(15,12,41,0.8)';
+            ctx.fillStyle = 'rgba(8,6,24,0.90)';
             ctx.fill();
 
-            // Cuerpo de la ranura (coloreado por fase)
+            // Cuerpo de ranura
             ctx.beginPath();
             ctx.arc(0, 0, r_mid, -bw_ang/2, bw_ang/2);
             ctx.arc(0, 0, r_out,  bw_ang/2, -bw_ang/2, true);
@@ -2200,71 +2505,681 @@
             ctx.fillStyle = col.fill;
             ctx.fill();
             ctx.strokeStyle = col.stroke;
-            ctx.lineWidth = 0.5;
+            ctx.lineWidth = 0.6;
             ctx.stroke();
 
-            // Símbolo de dirección si hay espacio
-            if (Q <= 48 && slot) {
-                ctx.fillStyle = '#fff';
-                ctx.font = `bold ${Math.max(7, W * 0.022)}px monospace`;
+            // Símbolo dirección
+            if (Q <= 60 && slot) {
+                const rm  = (r_mid + r_out) / 2;
+                const fsz = Math.max(6, Math.min(11, W * 0.025));
+                ctx.fillStyle = 'rgba(255,255,255,0.90)';
+                ctx.font = `bold ${fsz}px monospace`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText(slot.dir, (r_mid + r_out) / 2, 0);
+                ctx.fillText(slot.dir === '+' ? '•' : '×', rm, 0);
+            }
+
+            // Número de ranura (cada 3 ranuras si Q≤48)
+            if (Q <= 48 && i % 3 === 0) {
+                const rn = r_out + 8;
+                ctx.fillStyle = 'rgba(148,163,184,0.70)';
+                ctx.font = `${Math.max(5, W * 0.018)}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(i + 1, rn, 0);
             }
 
             ctx.restore();
         }
 
-        // Bore (agujero interior)
+        // 3. Bore y rotor
         ctx.beginPath();
         ctx.arc(cx, cy, R_bore, 0, 2 * Math.PI);
-        ctx.fillStyle = 'rgba(10,8,36,0.97)';
+        ctx.fillStyle = 'rgba(6,4,20,0.97)';
         ctx.fill();
-        ctx.strokeStyle = 'rgba(34,211,238,0.35)';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(34,211,238,0.40)';
+        ctx.lineWidth = 1.2;
         ctx.stroke();
 
-        // Rotor (referencia, línea de puntos)
-        ctx.beginPath();
-        ctx.arc(cx, cy, R_rotor, 0, 2 * Math.PI);
-        ctx.strokeStyle = 'rgba(148,163,184,0.18)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([3, 5]);
-        ctx.stroke();
-        ctx.setLineDash([]);
+        if (R_rotor > 8) {
+            ctx.beginPath();
+            ctx.arc(cx, cy, R_rotor, 0, 2 * Math.PI);
+            ctx.strokeStyle = 'rgba(148,163,184,0.15)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([2, 4]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
 
-        // Etiqueta central
+        // 4. Etiqueta central
         ctx.fillStyle = '#94a3b8';
-        ctx.font = `bold ${W * 0.032}px Segoe UI, sans-serif`;
+        ctx.font = `bold ${Math.max(9, W * 0.034)}px Segoe UI, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(`${r.P}P / Q${r.Q}`, cx, cy);
 
-        // Leyenda
+        // 5. Leyenda
         const phases = r.motorType === 'three' ? ['A','B','C'] : ['A','Aux'];
-        const labels = r.motorType === 'three' ? ['Fase A','Fase B','Fase C'] : ['Principal','Auxiliar'];
-        ctx.font = `${W * 0.028}px Segoe UI, sans-serif`;
-        let ly = W - (phases.length * 19 + 10);
+        const labels = r.motorType === 'three'
+            ? ['Fase U (L1)', 'Fase V (L2)', 'Fase W (L3)']
+            : ['Principal', 'Auxiliar'];
+        const LH = 17, LX = 8, LY0 = W - phases.length * LH - 6;
+        ctx.font = `${Math.max(8, W * 0.026)}px Segoe UI, sans-serif`;
         phases.forEach((ph, i) => {
-            ctx.fillStyle = PHASE_COLOR[ph].fill;
-            ctx.fillRect(12, ly + i * 19, 12, 12);
-            ctx.strokeStyle = PHASE_COLOR[ph].stroke;
-            ctx.strokeRect(12, ly + i * 19, 12, 12);
-            ctx.fillStyle = PHASE_COLOR[ph].label;
+            const col = PH_COL[ph];
+            ctx.fillStyle = col.fill;
+            ctx.fillRect(LX, LY0 + i * LH, 10, 10);
+            ctx.strokeStyle = col.stroke;
+            ctx.lineWidth = 0.8;
+            ctx.strokeRect(LX, LY0 + i * LH, 10, 10);
+            ctx.fillStyle = col.label;
             ctx.textAlign = 'left';
-            ctx.fillText(labels[i], 28, ly + i * 19 + 7);
+            ctx.fillText(labels[i], LX + 14, LY0 + i * LH + 6);
+        });
+    }
+
+    // =========================================================================
+    // ── CANVAS: DIAGRAMA DE CONEXIONES (desarrollo lineal tipo arpa) ──────────
+    // =========================================================================
+    function _drawConnDiagram(r) {
+        const container = document.getElementById('motorConnContainer');
+        const canvas    = document.getElementById('motorConnCanvas');
+        if (!canvas || !container) return;
+
+        // Solo mostrar para trifásico con datos de grupos
+        if (r.motorType !== 'three' || !r.phase_starts || !r.groups_per_phase) {
+            container.style.display = 'none';
+            return;
+        }
+        container.style.display = '';
+
+        const Q   = r.Q;
+        const gpf = r.groups_per_phase;   // grupos por fase
+        const spg = r.q_int || Math.round(r.q);  // ranuras por grupo (q ranuras/polo/fase)
+        const isP = r.groups_connection === 'paralelo';
+
+        // Paso entre inicios de grupo consecutivo de la MISMA fase = 2 × groupStep
+        const groupStep = Math.round(Q / (r.P * 3));  // ranuras entre grupos de la misma fase / 2
+        const phaseStarts = [r.phase_starts.U - 1, r.phase_starts.V - 1, r.phase_starts.W - 1];
+
+        // Construir lista de grupos por fase: [{init, fin, label}, ...]
+        // init y fin son índices 0-based de ranura
+        const phGroups = [[], [], []];
+        for (let pi = 0; pi < 3; pi++) {
+            for (let g = 0; g < gpf; g++) {
+                const s0 = (phaseStarts[pi] + g * groupStep * 2) % Q;
+                const s1 = (s0 + spg - 1 + Q) % Q;
+                phGroups[pi].push({ init: s0, fin: s1 });
+            }
+        }
+
+        // ── Dimensiones del canvas ───────────────────────────────────────────
+        const pW = Math.max(500, (canvas.parentElement?.clientWidth || 640) - 32);
+        // Altura: zona superior (arcos para capas 0→arriba) + línea base + zona inferior (terminales)
+        const PAD_X = 36;          // margen horizontal
+        const PAD_TOP = 16;        // margen superior
+        const BASE_Y_FRAC = 0.48;  // línea base como fracción de la altura del canvas
+        // Altura total: necesitamos acomodar arcos cuya altura máx es Q/2 ranuras de distancia
+        // Usamos 3 capas por fase (una por fase), más terminales abajo
+        const ARC_ZONE  = Math.round(pW * 0.22);   // px disponibles para arcos encima
+        const TERM_ZONE = Math.round(pW * 0.10);   // px para terminales debajo
+        const cH = PAD_TOP + ARC_ZONE + 24 + TERM_ZONE + 8;
+        canvas.width  = pW;
+        canvas.height = cH;
+
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, pW, cH);
+
+        // Fondo
+        ctx.fillStyle = 'rgba(15,23,42,0.85)';
+        ctx.fillRect(0, 0, pW, cH);
+
+        const BASE_Y = PAD_TOP + ARC_ZONE;  // y de la línea de ranuras
+
+        // ── Posición X de cada ranura ────────────────────────────────────────
+        const usableW = pW - 2 * PAD_X;
+        const slotX = i => PAD_X + (i / (Q - 1)) * usableW;
+
+        // ── Colores ──────────────────────────────────────────────────────────
+        const phColors = ['#ef4444', '#3b82f6', '#10b981'];
+        const phFill   = ['rgba(239,68,68,0.15)', 'rgba(59,130,246,0.15)', 'rgba(16,185,129,0.15)'];
+        const phNames  = ['U', 'V', 'W'];
+
+        // ── Línea base de ranuras ─────────────────────────────────────────────
+        ctx.strokeStyle = 'rgba(148,163,184,0.20)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(PAD_X - 10, BASE_Y);
+        ctx.lineTo(pW - PAD_X + 10, BASE_Y);
+        ctx.stroke();
+
+        // ── Bloques de grupo (rectángulos coloreados bajo la línea base) ─────
+        const BLOCK_H = 18;
+        for (let pi = 0; pi < 3; pi++) {
+            phGroups[pi].forEach((grp, gi) => {
+                const x0 = slotX(grp.init);
+                const x1 = slotX(grp.fin);
+                // Fondo del bloque
+                ctx.fillStyle = phFill[pi];
+                ctx.fillRect(x0 - 2, BASE_Y + 2, (x1 - x0) + 4, BLOCK_H);
+                ctx.strokeStyle = phColors[pi];
+                ctx.lineWidth = 1;
+                ctx.strokeRect(x0 - 2, BASE_Y + 2, (x1 - x0) + 4, BLOCK_H);
+                // Etiqueta grupo
+                const lbl = `${phNames[pi]}${gi + 1}`;
+                const midX = (x0 + x1) / 2;
+                ctx.fillStyle = phColors[pi];
+                ctx.font = `bold ${Math.max(7, pW * 0.013)}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(lbl, midX, BASE_Y + 2 + BLOCK_H / 2);
+            });
+        }
+
+        // ── Pins de inicio (I) y fin (F) de cada grupo ───────────────────────
+        const PIN_R = Math.max(3.5, pW * 0.006);
+        for (let pi = 0; pi < 3; pi++) {
+            phGroups[pi].forEach(grp => {
+                // Pin Inicio (relleno sólido)
+                ctx.beginPath();
+                ctx.arc(slotX(grp.init), BASE_Y, PIN_R, 0, 2 * Math.PI);
+                ctx.fillStyle = phColors[pi];
+                ctx.fill();
+                // Pin Fin (hueco)
+                ctx.beginPath();
+                ctx.arc(slotX(grp.fin), BASE_Y, PIN_R, 0, 2 * Math.PI);
+                ctx.fillStyle = 'rgba(15,23,42,0.95)';
+                ctx.fill();
+                ctx.strokeStyle = phColors[pi];
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            });
+        }
+
+        // ── Arcos de puente entre grupos (encima de la línea base) ───────────
+        // Cada fase usa una capa vertical diferente para no solaparse.
+        // La capa de la fase i ocupa una banda vertical del espacio ARC_ZONE.
+        // Dentro de esa banda, la altura del arco es proporcional a la distancia.
+        // Las capas se apilan: capa 0=W (verde, más cercana a base), 1=V (azul), 2=U (roja, más alta)
+        const layerOrder = [2, 1, 0];  // orden de capas (U arriba, W abajo)
+        const arcBandH   = ARC_ZONE / 3;  // px por capa
+
+        // Dibujar arco Bezier entre dos puntos, curvando hacia arriba
+        function drawArcBridge(x1, x2, maxH, color, lw, dashed) {
+            const midX = (x1 + x2) / 2;
+            const dist = Math.abs(x2 - x1);
+            // Altura del arco proporcional a la distancia, máximo maxH
+            const arcH = Math.min(maxH * 0.92, dist * 0.55);
+            ctx.beginPath();
+            ctx.moveTo(x1, BASE_Y);
+            ctx.bezierCurveTo(x1, BASE_Y - arcH, x2, BASE_Y - arcH, x2, BASE_Y);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = lw;
+            if (dashed) ctx.setLineDash([4, 3]);
+            else        ctx.setLineDash([]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            // Flecha en el destino (x2)
+            const arrLen = Math.max(4, pW * 0.008);
+            const dx = x2 - x1;
+            // Tangente al bezier en t=1: dirección es (x2-ctrlX2, 0+arcH) normalizada
+            const tx = dx > 0 ? 1 : -1;
+            ctx.beginPath();
+            ctx.moveTo(x2, BASE_Y);
+            ctx.lineTo(x2 - tx * arrLen * 0.7, BASE_Y - arrLen);
+            ctx.moveTo(x2, BASE_Y);
+            ctx.lineTo(x2 + tx * arrLen * 0.5, BASE_Y - arrLen);
+            ctx.stroke();
+        }
+
+        layerOrder.forEach(pi => {
+            const col  = phColors[pi];
+            const lw   = Math.max(1.5, pW * 0.004);
+            // Banda disponible para esta capa (0=más cerca de base, 2=más lejos)
+            const layer = layerOrder.indexOf(pi);  // posición en el stack
+            const bandTop = BASE_Y - (layer + 1) * arcBandH;
+            const maxH    = arcBandH * 0.88;
+
+            const grps = phGroups[pi];
+            if (isP) {
+                // PARALELO: todos los I al mismo nodo (U1), todos los F al neutro/triángulo
+                // Dibujar arcos I[0]—I[1], I[1]—I[2], … (barra de entrada)
+                for (let g = 0; g < gpf - 1; g++) {
+                    drawArcBridge(slotX(grps[g].init), slotX(grps[g+1].init),
+                        maxH, col, lw, false);
+                }
+                // Arcos F[0]—F[1], … (barra de salida) — línea de puntos
+                for (let g = 0; g < gpf - 1; g++) {
+                    drawArcBridge(slotX(grps[g].fin), slotX(grps[g+1].fin),
+                        maxH * 0.75, col, lw, true);
+                }
+            } else {
+                // SERIE: patrón F[g]—I[g+1] (fin del grupo g → inicio del grupo g+1)
+                // para devanado en cadena
+                for (let g = 0; g < gpf - 1; g++) {
+                    const xA = slotX(grps[g].fin);
+                    const xB = slotX(grps[g+1].init);
+                    drawArcBridge(xA, xB, maxH, col, lw, false);
+                }
+            }
         });
 
-        // Cotas OD / ID
-        ctx.strokeStyle = 'rgba(203,213,225,0.25)';
-        ctx.lineWidth = 0.8;
-        ctx.setLineDash([2, 4]);
-        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + R_ext, cy); ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.fillStyle = '#64748b';
-        ctx.font = `${W * 0.022}px Segoe UI, sans-serif`;
-        ctx.textAlign = 'left';
-        ctx.fillText(`OD ${OD}mm`, cx + R_ext * 0.05, cy - 4);
+        // ── Números de ranura — encima de la línea base, justo debajo de los arcos
+        ctx.fillStyle = 'rgba(148,163,184,0.60)';
+        ctx.font      = `${Math.max(7, pW * 0.012)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        for (let i = 0; i < Q; i++) {
+            if (Q <= 36 || i % 2 === 0) {
+                ctx.fillText(i + 1, slotX(i), BASE_Y - 2);
+            }
+        }
+
+        // ── Terminales de línea U1, V1, W1 y neutro ──────────────────────────
+        // Empiezan debajo del bloque de grupo + separación para que no tapen nada
+        const TERM_R = Math.max(9, pW * 0.016);
+        const termY = BASE_Y + BLOCK_H + TERM_R + 8;
+        const termNames  = ['U1', 'V1', 'W1'];
+        const neutNames  = ['U2', 'V2', 'W2'];
+        const isStarConn = r.connection === 'star';
+
+        for (let pi = 0; pi < 3; pi++) {
+            const col   = phColors[pi];
+            const grps  = phGroups[pi];
+            // Terminal de línea → primer Inicio del grupo 1
+            const txIn  = slotX(grps[0].init);
+            // Terminal de salida → último Fin del último grupo
+            const txOut = slotX(grps[gpf - 1].fin);
+
+            // Línea vertical desde la base al terminal
+            ctx.strokeStyle = col;
+            ctx.lineWidth = Math.max(1.5, pW * 0.003);
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            ctx.moveTo(txIn, BASE_Y);
+            ctx.lineTo(txIn, termY - TERM_R);
+            ctx.stroke();
+
+            // Círculo terminal entrada
+            ctx.beginPath();
+            ctx.arc(txIn, termY, TERM_R, 0, 2 * Math.PI);
+            ctx.fillStyle = col;
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.font = `bold ${Math.max(7, pW * 0.013)}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(termNames[pi], txIn, termY);
+
+            // Terminal de salida (U2/V2/W2 o neutro)
+            ctx.strokeStyle = col + 'aa';
+            ctx.lineWidth = Math.max(1, pW * 0.002);
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath();
+            ctx.moveTo(txOut, BASE_Y);
+            ctx.lineTo(txOut, termY - TERM_R);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            ctx.beginPath();
+            ctx.arc(txOut, termY, TERM_R, 0, 2 * Math.PI);
+            ctx.fillStyle = isStarConn ? 'rgba(15,23,42,0.95)' : col;
+            ctx.fill();
+            ctx.strokeStyle = col;
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            ctx.fillStyle = isStarConn ? col : '#fff';
+            ctx.font = `bold ${Math.max(6, pW * 0.012)}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(isStarConn ? neutNames[pi] : neutNames[pi], txOut, termY);
+        }
+
+        // Si estrella: barra de neutro uniendo los 3 terminales de salida (U2, V2, W2)
+        if (isStarConn) {
+            // Los tres terminales de salida son el último FIN de cada fase
+            const neutXs = [
+                slotX(phGroups[0][gpf-1].fin),   // U2
+                slotX(phGroups[1][gpf-1].fin),   // V2
+                slotX(phGroups[2][gpf-1].fin),   // W2
+            ];
+            const neutBarY = termY + TERM_R + 10;
+            const xMin = Math.min(...neutXs);
+            const xMax = Math.max(...neutXs);
+
+            // Bajada vertical desde cada terminal hasta la barra horizontal
+            neutXs.forEach((nx, pi) => {
+                ctx.strokeStyle = phColors[pi];
+                ctx.lineWidth = Math.max(1.5, pW * 0.003);
+                ctx.setLineDash([]);
+                ctx.beginPath();
+                ctx.moveTo(nx, termY + TERM_R);
+                ctx.lineTo(nx, neutBarY);
+                ctx.stroke();
+            });
+
+            // Barra horizontal de neutro (los 3 puntos)
+            ctx.strokeStyle = '#94a3b8';
+            ctx.lineWidth = Math.max(3, pW * 0.005);
+            ctx.lineCap = 'round';
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            ctx.moveTo(xMin, neutBarY);
+            ctx.lineTo(xMax, neutBarY);
+            ctx.stroke();
+            ctx.lineCap = 'butt';
+
+            // Punto de unión en los tres cruces
+            neutXs.forEach(nx => {
+                ctx.beginPath();
+                ctx.arc(nx, neutBarY, Math.max(3, pW * 0.005), 0, 2 * Math.PI);
+                ctx.fillStyle = '#94a3b8';
+                ctx.fill();
+            });
+
+            // Etiqueta N al lado del último punto
+            ctx.fillStyle = '#cbd5e1';
+            ctx.font = `bold ${Math.max(8, pW * 0.013)}px sans-serif`;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('N', xMax + 6, neutBarY);
+        }
+
+        // ── Título / leyenda inferior ─────────────────────────────────────────
+        ctx.fillStyle = 'rgba(100,116,139,0.80)';
+        ctx.font = `${Math.max(8, pW * 0.013)}px Segoe UI, sans-serif`;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'top';
+        ctx.fillText(
+            `${gpf} grupos/fase · ${isP ? 'Paralelo' : 'Serie'} · ${r.connection === 'star' ? 'Estrella Y' : 'Triángulo Δ'} · Q=${Q} P=${r.P}`,
+            pW - 8, 4
+        );
+
+        _drawTerminalDiagram(r);
+    }
+
+    // =========================================================================
+    // ── CANVAS: BORNERAS ESTRELLA / TRIÁNGULO ────────────────────────────────
+    // Disposición IEC estándar (igual que imagen de referencia):
+    //   Fila superior: U1  V1  W1
+    //   Fila inferior: W2  U2  V2
+    // Bobinas (IDÉNTICAS en ambas conexiones):
+    //   U1 (sup col0) ──cable U── U2 (inf col1)   → cable diagonal der
+    //   V1 (sup col1) ──cable V── V2 (inf col2)   → cable diagonal der
+    //   W1 (sup col2) ──cable W── W2 (inf col0)   → cable diagonal izq (cruza)
+    // Chapas:
+    //   ESTRELLA: una barra larga horizontal en fila inf uniendo W2–U2–V2
+    //   TRIÁNGULO: tres chapas verticales W2↔U1, U2↔V1, V2↔W1
+    // =========================================================================
+    function _drawTerminalDiagram(r) {
+        const canvas = document.getElementById('motorTermCanvas');
+        if (!canvas) return;
+
+        const pW = Math.max(440, (canvas.parentElement?.clientWidth || 660) - 16);
+        const pH = Math.round(pW * 0.44);
+        canvas.width  = pW;
+        canvas.height = pH;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, pW, pH);
+
+        const panW = Math.floor(pW / 2) - 6;
+        const panH = pH - 4;
+
+        // ── Helpers ──────────────────────────────────────────────────────────
+
+        // Bornera: cuadrado con tornillo y label dentro
+        function drawBornera(x, y, label, col, BR) {
+            const s = BR * 2.0;
+            ctx.fillStyle = 'rgba(20,30,52,0.97)';
+            ctx.strokeStyle = col;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(x - s/2, y - s/2, s, s, 4);
+            else ctx.rect(x - s/2, y - s/2, s, s);
+            ctx.fill(); ctx.stroke();
+            // Cruz tornillo
+            const t = BR * 0.42;
+            ctx.strokeStyle = col + '99';
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.moveTo(x-t, y); ctx.lineTo(x+t, y);
+            ctx.moveTo(x, y-t); ctx.lineTo(x, y+t);
+            ctx.stroke();
+            // Label
+            ctx.fillStyle = '#e2e8f0';
+            ctx.font = `bold ${Math.max(7, pW * 0.013)}px Segoe UI, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, x, y);
+        }
+
+        // Chapa horizontal: barra gruesa color cobre entre dos puntos
+        function drawJumperH(x0, x1, y, col, thick) {
+            ctx.fillStyle = col + 'dd';
+            ctx.strokeStyle = col;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.rect(x0, y - thick/2, x1 - x0, thick);
+            ctx.fill(); ctx.stroke();
+            // Agujeros (círculos) sobre cada bornera que toca
+            // (se dibujan en drawBornera, aquí solo la barra)
+        }
+
+        // Chapa vertical: barra gruesa color cobre entre dos puntos
+        function drawJumperV(x, y0, y1, col, thick) {
+            ctx.fillStyle = col + 'dd';
+            ctx.strokeStyle = col;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.rect(x - thick/2, y0, thick, y1 - y0);
+            ctx.fill(); ctx.stroke();
+        }
+
+        // Bobina: cable oblicuo con espiral dibujada en el centro
+        function drawCoil(x1, y1, x2, y2, col, BR) {
+            const lw = Math.max(1.5, pW * 0.003);
+            ctx.strokeStyle = col;
+            ctx.lineWidth = lw;
+            ctx.setLineDash([]);
+
+            const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+            const coilH = Math.min(28, Math.abs(y2 - y1) * 0.35);
+            const coilW = BR * 1.4;
+
+            // Cable tramo superior: desde bornera hasta inicio espiral
+            ctx.beginPath();
+            ctx.moveTo(x1, y1 + BR);
+            ctx.lineTo(mx, my - coilH * 1.1);
+            ctx.stroke();
+
+            // Cable tramo inferior: desde fin espiral hasta bornera
+            ctx.beginPath();
+            ctx.moveTo(mx, my + coilH * 1.1);
+            ctx.lineTo(x2, y2 - BR);
+            ctx.stroke();
+
+            // Espiral (serie de arcos semicirculares)
+            const nLoops = 4;
+            const loopH  = coilH * 2 / nLoops;
+            ctx.beginPath();
+            for (let i = 0; i < nLoops; i++) {
+                const cy = (my - coilH) + i * loopH + loopH / 2;
+                const startA = -Math.PI;
+                const endA   = 0;
+                ctx.arc(mx, cy, loopH / 2, startA, endA, i % 2 !== 0);
+            }
+            ctx.stroke();
+        }
+
+        // Flecha de alimentación de red
+        function drawFeed(x, yTop, label, col) {
+            const arrowLen = 18;
+            ctx.strokeStyle = col;
+            ctx.lineWidth = Math.max(1.5, pW * 0.003);
+            ctx.setLineDash([]);
+            // Línea
+            ctx.beginPath();
+            ctx.moveTo(x, yTop);
+            ctx.lineTo(x, yTop - arrowLen);
+            ctx.stroke();
+            // Punta (triángulo sólido apuntando hacia abajo = entrante)
+            ctx.beginPath();
+            ctx.moveTo(x,   yTop);
+            ctx.lineTo(x-5, yTop - 10);
+            ctx.lineTo(x+5, yTop - 10);
+            ctx.closePath();
+            ctx.fillStyle = col;
+            ctx.fill();
+            // Label
+            ctx.fillStyle = col;
+            ctx.font = `bold ${Math.max(8, pW * 0.013)}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(label, x, yTop - arrowLen - 1);
+        }
+
+        // ═════════════════════════════════════════════════════════════════════
+        // Dos paneles: estrella (izq) y triángulo (der)
+        // ═════════════════════════════════════════════════════════════════════
+        ['star', 'delta'].forEach((type, idx) => {
+            const ox       = idx === 0 ? 2 : panW + 14;
+            const oy       = 2;
+            const isActive = r.connection === type;
+
+            // Fondo y borde del panel
+            ctx.fillStyle = 'rgba(15,23,42,0.90)';
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(ox, oy, panW, panH, 8);
+            else ctx.rect(ox, oy, panW, panH);
+            ctx.fill();
+            ctx.strokeStyle = isActive ? '#22d3ee' : 'rgba(255,255,255,0.08)';
+            ctx.lineWidth   = isActive ? 2.5 : 1;
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(ox, oy, panW, panH, 8);
+            else ctx.rect(ox, oy, panW, panH);
+            ctx.stroke();
+
+            // Título
+            const fsz = Math.max(11, pW * 0.021);
+            ctx.fillStyle = isActive ? '#22d3ee' : '#475569';
+            ctx.font = `bold ${fsz}px Segoe UI, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.fillText(
+                type === 'star' ? 'Estrella  (Y)' : 'Triángulo  (Δ)',
+                ox + panW / 2, oy + 6
+            );
+            if (isActive) {
+                ctx.fillStyle = 'rgba(34,211,238,0.60)';
+                ctx.font = `${Math.max(7, pW * 0.011)}px sans-serif`;
+                ctx.fillText('▲ ACTIVO', ox + panW / 2, oy + 6 + fsz + 2);
+            }
+
+            // ── Layout de borneras ────────────────────────────────────────────
+            const BR    = Math.max(10, pW * 0.018);
+            const titleH = isActive ? fsz * 2 + 14 : fsz + 14;
+            // Área de trabajo dentro del panel
+            const areaTop = oy + titleH;
+            const areaBot = oy + panH - 10;
+            const areaH   = areaBot - areaTop;
+
+            // Filas: sup a 30% del área, inf a 78%
+            const rowY = [
+                areaTop + areaH * 0.22,   // fila superior
+                areaTop + areaH * 0.74,   // fila inferior
+            ];
+
+            // Columnas: 3 borneras equidistantes
+            const colX = [
+                ox + panW * 0.18,
+                ox + panW * 0.50,
+                ox + panW * 0.82,
+            ];
+
+            // Posiciones fijas IEC:
+            //   Fila sup:  U1(col0)  V1(col1)  W1(col2)
+            //   Fila inf:  W2(col0)  U2(col1)  V2(col2)
+            const bPos = {
+                U1: { x: colX[0], y: rowY[0] },
+                V1: { x: colX[1], y: rowY[0] },
+                W1: { x: colX[2], y: rowY[0] },
+                W2: { x: colX[0], y: rowY[1] },
+                U2: { x: colX[1], y: rowY[1] },
+                V2: { x: colX[2], y: rowY[1] },
+            };
+            const bCol = {
+                U1:'#ef4444', U2:'#ef4444',
+                V1:'#3b82f6', V2:'#3b82f6',
+                W1:'#10b981', W2:'#10b981',
+            };
+
+            const thick = Math.max(6, BR * 0.60);  // grosor de chapa
+
+            // ── 1. Cables de bobinas (IDÉNTICOS en ambas conexiones) ──────────
+            // Bobina U: U1(sup col0) → U2(inf col1)   diagonal derecha
+            // Bobina V: V1(sup col1) → V2(inf col2)   diagonal derecha
+            // Bobina W: W1(sup col2) → W2(inf col0)   diagonal izquierda (cruza)
+            drawCoil(bPos.U1.x, bPos.U1.y, bPos.U2.x, bPos.U2.y, '#ef4444', BR);
+            drawCoil(bPos.V1.x, bPos.V1.y, bPos.V2.x, bPos.V2.y, '#3b82f6', BR);
+            drawCoil(bPos.W1.x, bPos.W1.y, bPos.W2.x, bPos.W2.y, '#10b981', BR);
+
+            // ── 2. Borneras (encima de cables, debajo de chapas) ──────────────
+            Object.entries(bPos).forEach(([lbl, p]) => drawBornera(p.x, p.y, lbl, bCol[lbl], BR));
+
+            // ── 3. Chapas de cortocircuito ────────────────────────────────────
+            if (type === 'star') {
+                // ESTRELLA: una chapa horizontal larga en fila inferior
+                // une W2 – U2 – V2  (los tres terminales de fin de bobina)
+                const chapY  = rowY[1];                  // a la altura de la fila inferior
+                const xLeft  = bPos.W2.x - BR * 0.5;
+                const xRight = bPos.V2.x + BR * 0.5;
+                drawJumperH(xLeft, xRight, chapY, '#b0b8c8', thick);
+                // Punto de unión sobre cada bornera
+                [bPos.W2, bPos.U2, bPos.V2].forEach(p => {
+                    ctx.beginPath();
+                    ctx.arc(p.x, chapY, thick * 0.45, 0, 2 * Math.PI);
+                    ctx.fillStyle = '#b0b8c8';
+                    ctx.fill();
+                });
+                // Etiqueta N al extremo derecho
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = `bold ${Math.max(8, pW * 0.014)}px sans-serif`;
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('N', xRight + 5, chapY);
+
+                // Alimentación L1 L2 L3 desde fila superior
+                drawFeed(bPos.U1.x, bPos.U1.y - BR, 'L1', '#ef4444');
+                drawFeed(bPos.V1.x, bPos.V1.y - BR, 'L2', '#3b82f6');
+                drawFeed(bPos.W1.x, bPos.W1.y - BR, 'L3', '#10b981');
+
+            } else {
+                // TRIÁNGULO: tres chapas VERTICALES que unen fila sup con fila inf
+                //   Chapa 1: W2(inf col0) ↔ U1(sup col0)   → nodo L1
+                //   Chapa 2: U2(inf col1) ↔ V1(sup col1)   → nodo L2
+                //   Chapa 3: V2(inf col2) ↔ W1(sup col2)   → nodo L3
+                const chapas = [
+                    { top: bPos.U1, bot: bPos.W2, col: '#ef4444',  line: 'L1' },
+                    { top: bPos.V1, bot: bPos.U2, col: '#3b82f6',  line: 'L2' },
+                    { top: bPos.W1, bot: bPos.V2, col: '#10b981',  line: 'L3' },
+                ];
+                chapas.forEach(ch => {
+                    drawJumperV(ch.top.x, ch.top.y + BR * 0.5, ch.bot.y - BR * 0.5, ch.col, thick);
+                    // Puntos de unión
+                    [ch.top, ch.bot].forEach(p => {
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, thick * 0.45, 0, 2 * Math.PI);
+                        ctx.fillStyle = ch.col;
+                        ctx.fill();
+                    });
+                    // Flecha de alimentación sobre la fila superior
+                    drawFeed(ch.top.x, ch.top.y - BR, ch.line, ch.col);
+                });
+            }
+
+            // ── 4. Redibujar borneras encima de chapas ────────────────────────
+            Object.entries(bPos).forEach(([lbl, p]) => drawBornera(p.x, p.y, lbl, bCol[lbl], BR));
+        });
     }
 
     // =========================================================================

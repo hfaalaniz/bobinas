@@ -153,96 +153,6 @@
     </div>
     <input type="hidden" id="motorType" value="three">
 
-    <!-- ── DATOS DE PLACA ── -->
-    <div class="panel-section-label">Datos de placa (nameplate)</div>
-
-    <div class="form-group">
-        <label for="motorVoltage">Tensión nominal (V):</label>
-        <input type="number" id="motorVoltage" value="380" min="1" step="1">
-        <small>Trifásico: tensión de línea. Monofásico: tensión nominal.</small>
-    </div>
-
-    <div class="form-group">
-        <label>Potencia:</label>
-        <div class="power-dual">
-            <div>
-                <label style="font-size:10px;color:#64748b;">HP</label>
-                <input type="number" id="motorPowerHP" value="5" min="0.1" step="0.1" oninput="motorHPtoKW()">
-            </div>
-            <div class="power-dual-sep">=</div>
-            <div>
-                <label style="font-size:10px;color:#64748b;">kW</label>
-                <input type="number" id="motorPowerKW" value="3.728" min="0.01" step="0.001" oninput="motorKWtoHP()">
-            </div>
-        </div>
-    </div>
-
-    <div class="form-group">
-        <label for="motorRPM">Velocidad nominal (RPM):</label>
-        <input type="number" id="motorRPM" value="1450" min="100" step="1">
-        <small>Típico: 1450 (4P/50Hz), 1750 (4P/60Hz), 2900 (2P/50Hz)</small>
-    </div>
-
-    <div class="form-group">
-        <label for="motorFreq">Frecuencia (Hz):</label>
-        <select id="motorFreq">
-            <option value="50" selected>50 Hz</option>
-            <option value="60">60 Hz</option>
-        </select>
-    </div>
-
-    <div class="form-grid-2">
-        <div class="form-group">
-            <label for="motorCosfi">cos φ:</label>
-            <input type="number" id="motorCosfi" value="0.85" min="0.5" max="1" step="0.01">
-        </div>
-        <div class="form-group">
-            <label for="motorEta">η eficiencia:</label>
-            <input type="number" id="motorEta" value="0.87" min="0.5" max="0.99" step="0.01">
-        </div>
-    </div>
-
-    <!-- ── CLASE DE AISLAMIENTO ── -->
-    <div class="panel-section-label">Clase de aislamiento</div>
-    <div class="ins-class-row">
-        <button class="ins-btn ins-A" id="insA" onclick="motorSetInsClass('A')">A<br><span style="font-weight:400;font-size:9px;">105°C</span></button>
-        <button class="ins-btn ins-B active" id="insB" onclick="motorSetInsClass('B')">B<br><span style="font-weight:400;font-size:9px;">130°C</span></button>
-        <button class="ins-btn ins-F" id="insF" onclick="motorSetInsClass('F')">F<br><span style="font-weight:400;font-size:9px;">155°C</span></button>
-        <button class="ins-btn ins-H" id="insH" onclick="motorSetInsClass('H')">H<br><span style="font-weight:400;font-size:9px;">180°C</span></button>
-    </div>
-    <input type="hidden" id="motorInsClass" value="B">
-
-    <!-- ── CONEXIÓN TRIFÁSICA ── -->
-    <div id="motorThreePhaseSection">
-        <div class="panel-section-label">Conexión trifásica</div>
-        <div class="form-group">
-            <label for="motorConnection">Conexión:</label>
-            <select id="motorConnection">
-                <option value="star" selected>Estrella (Y)</option>
-                <option value="delta">Triángulo (Δ)</option>
-            </select>
-        </div>
-    </div>
-
-    <!-- ── OPCIONES MONOFÁSICO ── -->
-    <div id="motorSinglePhaseSection" style="display:none;">
-        <div class="panel-section-label">Configuración monofásica</div>
-        <div class="form-group">
-            <label for="motorStartMethod">Método de arranque:</label>
-            <select id="motorStartMethod">
-                <option value="cap_start">Capacitor de arranque (C-start)</option>
-                <option value="cap_run">Capacitor permanente (C-run)</option>
-                <option value="split_phase">Fase partida (Split-phase)</option>
-                <option value="shaded_pole">Polos salientes (Shaded-pole)</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label for="motorAuxRatio">Ratio vueltas aux / principal:</label>
-            <input type="number" id="motorAuxRatio" value="1.3" min="1.0" max="2.5" step="0.05">
-            <small>Típico: 1.2–1.6 para C-start; 1.3–1.8 para C-run</small>
-        </div>
-    </div>
-
     <!-- ══════════════════════════════════════════════════════
          GEOMETRÍA DEL ESTÁTOR
     ═══════════════════════════════════════════════════════ -->
@@ -473,6 +383,96 @@
         Las dimensiones de ranura permiten calcular el factor de llenado real y la densidad de flujo en el diente.
     </small>
 
+    <!-- ── DATOS DE PLACA ── -->
+    <div class="panel-section-label">Datos de placa (nameplate)</div>
+
+    <div class="form-group">
+        <label for="motorVoltage">Tensión nominal (V):</label>
+        <input type="number" id="motorVoltage" value="380" min="1" step="1">
+        <small>Trifásico: tensión de línea. Monofásico: tensión nominal.</small>
+    </div>
+
+    <div class="form-group">
+        <label>Potencia:</label>
+        <div class="power-dual">
+            <div>
+                <label style="font-size:10px;color:#64748b;">HP</label>
+                <input type="number" id="motorPowerHP" value="5" min="0.1" step="0.1" oninput="motorHPtoKW()">
+            </div>
+            <div class="power-dual-sep">=</div>
+            <div>
+                <label style="font-size:10px;color:#64748b;">kW</label>
+                <input type="number" id="motorPowerKW" value="3.728" min="0.01" step="0.001" oninput="motorKWtoHP()">
+            </div>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label for="motorRPM">Velocidad nominal (RPM):</label>
+        <input type="number" id="motorRPM" value="1450" min="100" step="1">
+        <small>Típico: 1450 (4P/50Hz), 1750 (4P/60Hz), 2900 (2P/50Hz)</small>
+    </div>
+
+    <div class="form-group">
+        <label for="motorFreq">Frecuencia (Hz):</label>
+        <select id="motorFreq">
+            <option value="50" selected>50 Hz</option>
+            <option value="60">60 Hz</option>
+        </select>
+    </div>
+
+    <div class="form-grid-2">
+        <div class="form-group">
+            <label for="motorCosfi">cos φ:</label>
+            <input type="number" id="motorCosfi" value="0.85" min="0.5" max="1" step="0.01">
+        </div>
+        <div class="form-group">
+            <label for="motorEta">η eficiencia:</label>
+            <input type="number" id="motorEta" value="0.87" min="0.5" max="0.99" step="0.01">
+        </div>
+    </div>
+
+    <!-- ── CLASE DE AISLAMIENTO ── -->
+    <div class="panel-section-label">Clase de aislamiento</div>
+    <div class="ins-class-row">
+        <button class="ins-btn ins-A" id="insA" onclick="motorSetInsClass('A')">A<br><span style="font-weight:400;font-size:9px;">105°C</span></button>
+        <button class="ins-btn ins-B active" id="insB" onclick="motorSetInsClass('B')">B<br><span style="font-weight:400;font-size:9px;">130°C</span></button>
+        <button class="ins-btn ins-F" id="insF" onclick="motorSetInsClass('F')">F<br><span style="font-weight:400;font-size:9px;">155°C</span></button>
+        <button class="ins-btn ins-H" id="insH" onclick="motorSetInsClass('H')">H<br><span style="font-weight:400;font-size:9px;">180°C</span></button>
+    </div>
+    <input type="hidden" id="motorInsClass" value="B">
+
+    <!-- ── CONEXIÓN TRIFÁSICA ── -->
+    <div id="motorThreePhaseSection">
+        <div class="panel-section-label">Conexión trifásica</div>
+        <div class="form-group">
+            <label for="motorConnection">Conexión:</label>
+            <select id="motorConnection">
+                <option value="star" selected>Estrella (Y)</option>
+                <option value="delta">Triángulo (Δ)</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- ── OPCIONES MONOFÁSICO ── -->
+    <div id="motorSinglePhaseSection" style="display:none;">
+        <div class="panel-section-label">Configuración monofásica</div>
+        <div class="form-group">
+            <label for="motorStartMethod">Método de arranque:</label>
+            <select id="motorStartMethod">
+                <option value="cap_start">Capacitor de arranque (C-start)</option>
+                <option value="cap_run">Capacitor permanente (C-run)</option>
+                <option value="split_phase">Fase partida (Split-phase)</option>
+                <option value="shaded_pole">Polos salientes (Shaded-pole)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="motorAuxRatio">Ratio vueltas aux / principal:</label>
+            <input type="number" id="motorAuxRatio" value="1.3" min="1.0" max="2.5" step="0.05">
+            <small>Típico: 1.2–1.6 para C-start; 1.3–1.8 para C-run</small>
+        </div>
+    </div>
+
     <!-- ── DATOS ORIGINALES (REFERENCIA) ── -->
     <div class="panel-section-label">Datos originales (referencia, opcional)</div>
     <div class="form-grid-2">
@@ -512,6 +512,12 @@
             <h3>Distribución de Ranuras por Fase</h3>
             <canvas id="motorSlotCanvas"></canvas>
         </div>
+    </div>
+    <div class="canvas-container" id="motorConnContainer" style="margin-top:16px;display:none;">
+        <h3>Diagrama de Conexiones de Grupos</h3>
+        <canvas id="motorConnCanvas"></canvas>
+        <h3 style="margin-top:18px;">Conexionado de Borneras</h3>
+        <canvas id="motorTermCanvas"></canvas>
     </div>
 </main>
 
