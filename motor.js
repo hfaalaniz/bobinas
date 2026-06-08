@@ -270,14 +270,25 @@
             return;
         }
         const { P } = _computePoles(f, rpm);
-        const tau_p = Math.PI * ID / P;
-        const ratio = L / tau_p;
-        let Bav = ratio > 1.5 ? 0.75 : ratio < 0.8 ? 0.65 : 0.70;
-        Bav = Math.max(0.60, Math.min(0.85, Bav));
+        // Bav = Φ / (τm × L); Φ estimado por flujo típico en la corona
+        // Densidad de flujo en la corona: Bc = Φ / (Ac) donde Ac = (OD-ID)/2 × L
+        // Aproximación: Bav ≈ 0.637 × Bt (Bt en el diente, típico 1.4–1.6 T)
+        // Fórmula práctica: Bav ≈ (π × ID) / (2 × P × L) × 0.7  (ajuste empírico)
+        // Método más preciso: resolver B del entrehierro para un Bt nominal de 1.5 T
+        const Bt_nom = 1.50; // T en el diente — objetivo de diseño típico
+        const dims = _readSlotDims();
+        // Ancho del diente al bore (cuello, zona de máxima saturación):
+        //   b_tooth_bore = τ_slot_bore − b1
+        // Bav = Bt × b_tooth_bore × 0.97 / τ_slot_bore  (L se cancela)
+        const tau_slot_bore_mm = Math.PI * ID / Q;
+        const b1 = dims.b1 || 3;
+        const b_tooth_mm = Math.max(0.5, tau_slot_bore_mm - b1);
+        const Bav_calc = Bt_nom * b_tooth_mm * 0.97 / tau_slot_bore_mm;
+        const Bav = Math.min(0.90, Math.max(0.40, parseFloat(Bav_calc.toFixed(3))));
         _v('motorBav', Bav);
         const badge = document.getElementById('bav_calc_badge');
         if (badge) badge.style.display = 'inline-block';
-        if (typeof showToast === 'function') showToast(`Bav calculado: ${Bav.toFixed(3)} T`, 'success');
+        if (typeof showToast === 'function') showToast(`Bav calculado: ${Bav} T (diente nominal ${Bt_nom} T)`, 'success');
     };
 
     // ── Diagrama SVG dinámico de ranura ──────────────────────────────────────
@@ -395,7 +406,7 @@
         return {
             b1: _fv('semiB1') || 3.0, h1: _fv('semiH1') || 1.0,
             hw: _fv('semiHw') || 16.0, r: _fv('semiR')  || 3.5,
-            bw: 2 * (_fv('semiR') || 3.5),
+            bw: _fv('semiHw') || 16.0, // ancho = hw para calcular diente
         };
     }
 
@@ -439,13 +450,6 @@
         const A_iso_wall  = t_wall  * (2 * hw + bw);   // aislante perimetral (3 lados)
         const A_iso_layer = t_layer * bw;               // separador inter-capas
         return Math.max(1, A_body - A_iso_wall - A_iso_layer);
-    }
-
-    function _toothWidthMin(ID, Q, type, dims) {
-        const tau_slot = Math.PI * ID / Q;
-        if (type === 'rect') return tau_slot - dims.bw;
-        if (type === 'trap') return tau_slot - Math.max(dims.btop || dims.bw, dims.bbot || dims.bw);
-        return tau_slot - 2 * (dims.r || 3.5);
     }
 
     // ── Longitud media de vuelta (MTL) real ───────────────────────────────────
@@ -811,7 +815,7 @@
         const bsat     = p.steel ? p.steel.bsat : 1.8;
         const h_yoke_m = ((p.D_ext_mm - ID) / 2 - (d.hw || 18) - (d.h1 || 1)) / 1000; // m
         const tau_m_lim = Math.PI * (ID / 1000) / P;   // m
-        const Bc_max   = bsat * 0.92;  // 92% de Bsat — motores estándar operan a By 1.5-1.65T
+        const Bc_max   = bsat * 0.90;  // 90% de Bsat como límite seguro
         const Bav_max_byoke = h_yoke_m > 0
             ? (Bc_max * 2 * h_yoke_m * 0.97) / tau_m_lim
             : p.Bav;
@@ -922,14 +926,6 @@
         const h_yoke_check = (p.D_ext_mm - p.D_bore_mm) / 2 - (d.hw || 18) - (d.h1 || 1);
         const byLimitsKu = Ku > 0.55 && B_yoke > p.steel.bsat * 0.75;
         if (Ku > 0.55) {
-            if (B_tooth < 1.7) {
-                let Bav_up = p.Bav;
-                while (Bav_up < 0.85 && Bav_up < p.Bav + 0.051) Bav_up += 0.05;
-                Bav_up = Math.min(0.85, parseFloat(Bav_up.toFixed(3)));
-                if (Bav_up > p.Bav) {
-                    postWarnings.push(`Ku = ${(Ku*100).toFixed(0)}% con Bt=${B_tooth.toFixed(2)} T: conviene subir Bav a ${Bav_up.toFixed(3)} T para reducir vueltas y mejorar el llenado.`);
-                }
-            }
             if (byLimitsKu) {
                 postWarnings.push(`Llenado Ku = ${(Ku*100).toFixed(0)}% — CAUSA RAÍZ: corona demasiado delgada (h_yoke=${h_yoke_check.toFixed(1)} mm). `
                     + `La corona saturada (Bc=${B_yoke.toFixed(2)} T) obliga a bajar Bav, lo que dispara las vueltas. `
@@ -1171,7 +1167,7 @@
         const score = {
             Ku_ok:     r.Ku <= 0.52,
             Bt_ok:     r.B_tooth <= bsat * 0.90,
-            By_ok:     r.B_yoke  <= bsat * 0.92,
+            By_ok:     r.B_yoke  <= bsat * 0.82,
             J_ok:      r.J_real  <= r.J_max,
             FEM_ok:    Math.abs(r.E_verify / r.V_phase - 1) <= 0.07,
         };
@@ -1213,7 +1209,7 @@
 
         // Rango de Bav ordenado del más alto al más bajo.
         // Motores estándar operan entre 0.60 y 0.80 T; valores bajos generan exceso de vueltas y Ku alto.
-        const BavRange  = [0.85, 0.82, 0.80, 0.78, 0.76, 0.74, 0.72, 0.70, 0.68, 0.66, 0.64, 0.62, 0.60];
+        const BavRange  = [0.80, 0.76, 0.72, 0.68, 0.64, 0.60, 0.56, 0.52, 0.48, 0.44, 0.40];
         const pitchOpts = [
             { type: "full",  ratio: 1.000 },
             { type: "short", ratio: 0.889 },
@@ -2434,14 +2430,11 @@
     // ── CANVAS: SECCIÓN TRANSVERSAL DEL ESTÁTOR ──────────────────────────────
     // =========================================================================
 
-    let _lastStatorResults = null;  // para redibujar a alta resolución en el modal
-
-    function _drawStator(r, targetCanvas, overrideW) {
-        _lastStatorResults = r;
-        const canvas = targetCanvas || document.getElementById('motorStatorCanvas');
+    function _drawStator(r) {
+        const canvas = document.getElementById('motorStatorCanvas');
         if (!canvas) return;
 
-        const W = overrideW || Math.max(260, (canvas.parentElement?.clientWidth || 380) - 32);
+        const W = Math.max(260, (canvas.parentElement?.clientWidth || 380) - 32);
         canvas.width = canvas.height = W;
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, W, W);
@@ -2452,13 +2445,11 @@
         const d  = r.slotDims;
         const h_slot = (d.hw || 18) + (d.h1 || 1);
 
-        // El estátor ocupa el 72% del radio del canvas; el 28% restante es para arcos y bornes
-        const scale   = (W * 0.36) / (OD / 2);
-        const R_ext   = (OD / 2) * scale;          // borde exterior del hierro
-        const R_bore  = (ID / 2) * scale;           // borde interior (bore)
+        // OD ocupa 88% del canvas — sin margen para arcos
+        const scale   = (W * 0.44) / (OD / 2);
+        const R_ext   = (OD / 2) * scale;
+        const R_bore  = (ID / 2) * scale;
         const R_rotor = Math.max(4, R_bore - 2 * scale);
-        // Radio disponible para arcos y bornes: desde R_ext hasta W*0.49 (casi el borde del canvas)
-        const R_avail = W * 0.49 - R_ext;           // px disponibles afuera del hierro
 
         const PH_COL = {
             A:    { fill: 'rgba(239,68,68,0.62)',   stroke: '#ef4444', label: '#fca5a5' },
@@ -2528,8 +2519,8 @@
                 ctx.fillText(slot.dir === '+' ? '•' : '×', rm, 0);
             }
 
-            // Número de ranura — solo si hay espacio (sin arcos externos)
-            if (Q <= 48 && i % 3 === 0 && !r.y) {
+            // Número de ranura (cada 3 ranuras si Q≤48)
+            if (Q <= 48 && i % 3 === 0) {
                 const rn = r_out + 8;
                 ctx.fillStyle = 'rgba(148,163,184,0.70)';
                 ctx.font = `${Math.max(5, W * 0.018)}px sans-serif`;
@@ -2560,221 +2551,31 @@
             ctx.setLineDash([]);
         }
 
-        // 4. Cabezas de bobina frontales (arcos exteriores)
-        // ─────────────────────────────────────────────────────────────────────
-        // Cada bobina ocupa dos ranuras separadas por el paso y.
-        // La cabeza frontal conecta el borde exterior de la ranura i con el de
-        // la ranura i+y, curvándose hacia AFUERA del estátor.
-        // Usamos arc() de círculo, no Bezier: el arco pasa por el punto medio
-        // exterior calculado geométricamente.
-        //
-        // Con doble capa y Q=36, P=4: hay Q/2 = 18 bobinas únicas.
-        // Cada ranura '+' es la salida de una bobina; la ranura destino (i+y)
-        // recibe el conductor de retorno.
-        // ─────────────────────────────────────────────────────────────────────
-        if (r.slotTable && r.y && Q <= 72) {
-            const y = r.y;
-
-            // Espacio radial para arcos: 55% de R_avail, dejando 45% para bornes
-            const arcBand  = R_avail * 0.55;
-            // Las 3 fases usan radios escalonados dentro de arcBand
-            // fase 0 (A/U) el más cercano, fase 2 (C/W) el más lejano
-            const nPh = r.motorType === 'three' ? 3 : 2;
-            const phaseList = r.motorType === 'three' ? ['A','B','C'] : ['A','Aux'];
-            // Radio del arco para cada fase (radio del círculo que forma la cabeza)
-            // Cuanto mayor R_arc, más "alto" sobresale el arco sobre R_ext
-            const phArcR = {};
-            phaseList.forEach((ph, idx) => {
-                // Radio del círculo auxiliar que genera el arco
-                // = R_ext + fracción del espacio disponible
-                phArcR[ph] = R_ext + arcBand * (0.25 + idx * 0.30);
-            });
-
-            const lw = Math.max(1.2, W * 0.0042);
-
-            // Función que dibuja un arco de círculo entre dos puntos
-            // que sobresale radialmente hacia fuera
-            function drawCoilArc(p1x, p1y, p2x, p2y, R_arc, col) {
-                // Punto medio del segmento p1-p2
-                const mx = (p1x + p2x) / 2;
-                const my = (p1y + p2y) / 2;
-                // Distancia al centro del estátor desde ese punto medio
-                const dm = Math.hypot(mx - cx, my - cy);
-                if (dm < 1) return; // puntos opuestos — no dibujar
-                // Dirección radial hacia afuera en el punto medio
-                const nx = (mx - cx) / dm;
-                const ny = (my - cy) / dm;
-                // El arco debe pasar por un punto "pico" ubicado en R_arc
-                const peakX = cx + R_arc * nx;
-                const peakY = cy + R_arc * ny;
-
-                // Calcular el centro y radio del círculo que pasa por p1, pico y p2
-                // usando el hecho de que los tres puntos definen un círculo único.
-                // Solución directa para círculo por 3 puntos:
-                const ax = p1x, ay = p1y;
-                const bx = peakX, by = peakY;
-                const qx = p2x, qy = p2y;
-                const D = 2 * (ax*(by - qy) + bx*(qy - ay) + qx*(ay - by));
-                if (Math.abs(D) < 0.001) {
-                    // Colinear — línea recta
-                    ctx.beginPath();
-                    ctx.moveTo(ax, ay);
-                    ctx.lineTo(qx, qy);
-                    ctx.strokeStyle = col.stroke;
-                    ctx.lineWidth = lw;
-                    ctx.globalAlpha = 0.85;
-                    ctx.stroke();
-                    ctx.globalAlpha = 1;
-                    return;
-                }
-                const ux = ((ax*ax + ay*ay)*(by - qy) + (bx*bx + by*by)*(qy - ay) + (qx*qx + qy*qy)*(ay - by)) / D;
-                const uy = ((ax*ax + ay*ay)*(qx - bx) + (bx*bx + by*by)*(ax - qx) + (qx*qx + qy*qy)*(bx - ax)) / D;
-                const cr = Math.hypot(ax - ux, ay - uy);
-
-                // Ángulos del inicio y fin respecto al centro del arco
-                let a1 = Math.atan2(ay - uy, ax - ux);
-                let a2 = Math.atan2(qy - uy, qx - ux);
-                // Elegir la dirección del arco que pasa por el pico exterior
-                // El pico debe estar en el arco: comprobar si a1→a2 antihorario o horario
-                const aPeak = Math.atan2(peakY - uy, peakX - ux);
-                // Determinar si el arco CCW (a1→a2) pasa por el pico
-                // Si no, usar CW
-                let dp = aPeak - a1; while (dp < 0) dp += 2*Math.PI;
-                let d2 = a2   - a1; while (d2 < 0) d2 += 2*Math.PI;
-                const ccw = dp < d2; // pico cae dentro del arco CCW a1→a2
-
-                ctx.beginPath();
-                ctx.arc(ux, uy, cr, a1, a2, !ccw);
-                ctx.strokeStyle = col.stroke;
-                ctx.lineWidth = lw;
-                ctx.globalAlpha = 0.85;
-                ctx.stroke();
-                ctx.globalAlpha = 1;
-            }
-
-            for (let i = 0; i < Q; i++) {
-                const slotI = r.slotTable[i];
-                if (!slotI || slotI.dir !== '+') continue;
-
-                const j = (i + y) % Q;
-                const slotJ = r.slotTable[j];
-                if (!slotJ) continue;
-
-                const col  = PH_COL[slotI.phase] || PH_COL.empty;
-                const Rarc = phArcR[slotI.phase]  || (R_ext + arcBand * 0.4);
-
-                const angI = slotAngSpan * i - Math.PI / 2;
-                const angJ = slotAngSpan * j - Math.PI / 2;
-
-                // Puntos en el borde exterior del estátor
-                const x1 = cx + R_ext * Math.cos(angI);
-                const y1 = cy + R_ext * Math.sin(angI);
-                const x2 = cx + R_ext * Math.cos(angJ);
-                const y2 = cy + R_ext * Math.sin(angJ);
-
-                drawCoilArc(x1, y1, x2, y2, Rarc, col);
-            }
-        }
-
-        // 4b. Bornes de conexión — justo en el extremo exterior del espacio disponible
-        if (r.slotTable) {
-            const arcBand  = R_avail * 0.55;
-            const bornBand = R_avail - arcBand;
-            const bornR    = Math.max(5, Math.min(bornBand * 0.42, W * 0.030));
-            const R_borne  = R_ext + arcBand + bornBand * 0.50;
-            const fontSize = Math.max(7, bornR * 0.9);
-
-            const phStarts = r.motorType === 'three' && r.phase_starts
-                ? [r.phase_starts.U - 1, r.phase_starts.V - 1, r.phase_starts.W - 1]
-                : [0, Math.round(Q / 2)];
-            const phColors = r.motorType === 'three'
-                ? ['#ef4444', '#3b82f6', '#10b981']
-                : ['#ef4444', '#f59e0b'];
-            const phNames  = r.motorType === 'three' ? ['U', 'V', 'W'] : ['P', 'X'];
-
-            phStarts.forEach((si, pi) => {
-                const ang = slotAngSpan * si - Math.PI / 2;
-                const bx  = cx + R_borne * Math.cos(ang);
-                const by_  = cy + R_borne * Math.sin(ang);
-
-                // Línea de conexión desde el borde del hierro al borne
-                ctx.beginPath();
-                ctx.moveTo(cx + R_ext * Math.cos(ang), cy + R_ext * Math.sin(ang));
-                ctx.lineTo(bx, by_);
-                ctx.strokeStyle = phColors[pi];
-                ctx.lineWidth = Math.max(1.2, W * 0.003);
-                ctx.globalAlpha = 0.6;
-                ctx.stroke();
-                ctx.globalAlpha = 1;
-
-                // Fondo oscuro
-                ctx.beginPath();
-                ctx.arc(bx, by_, bornR + 2.5, 0, 2 * Math.PI);
-                ctx.fillStyle = 'rgba(10,15,35,0.97)';
-                ctx.fill();
-
-                // Borne coloreado
-                ctx.beginPath();
-                ctx.arc(bx, by_, bornR, 0, 2 * Math.PI);
-                ctx.fillStyle = phColors[pi];
-                ctx.fill();
-                ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 1.5;
-                ctx.stroke();
-
-                // Letra dentro
-                ctx.fillStyle = '#fff';
-                ctx.font = `bold ${fontSize}px Segoe UI, sans-serif`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(phNames[pi], bx, by_);
-            });
-        }
-
-        // 4c. Etiqueta central + leyenda integrada dentro del rotor
-        const phases = r.motorType === 'three' ? ['A','B','C'] : ['A','Aux'];
-        const labels = r.motorType === 'three'
-            ? ['U (L1)', 'V (L2)', 'W (L3)']
-            : ['Principal', 'Auxiliar'];
-
-        // Tamaños adaptativos al radio del rotor disponible
-        const lblSize  = Math.max(7,  W * 0.024);
-        const sqSize   = Math.max(6,  W * 0.020);
-        const lineH    = sqSize + 4;
-        const totalH   = phases.length * lineH;
-
-        // Etiqueta "4P/Q36" encima de la leyenda, en el centro
-        const titleSize = Math.max(9, W * 0.032);
-        const titleY    = cy - totalH / 2 - titleSize * 0.8;
+        // 4. Etiqueta central
         ctx.fillStyle = '#94a3b8';
-        ctx.font = `bold ${titleSize}px Segoe UI, sans-serif`;
+        ctx.font = `bold ${Math.max(9, W * 0.034)}px Segoe UI, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(`${r.P}P / Q${r.Q}`, cx, titleY);
+        ctx.fillText(`${r.P}P / Q${r.Q}`, cx, cy);
 
-        // Leyenda centrada en el rotor
-        const legendW  = sqSize + 4 + lblSize * 5.5;  // ancho estimado
-        const legendX0 = cx - legendW / 2;
-        const legendY0 = cy - totalH / 2 + lineH * 0.1;
-
-        ctx.font = `${lblSize}px Segoe UI, sans-serif`;
+        // 5. Leyenda
+        const phases = r.motorType === 'three' ? ['A','B','C'] : ['A','Aux'];
+        const labels = r.motorType === 'three'
+            ? ['Fase U (L1)', 'Fase V (L2)', 'Fase W (L3)']
+            : ['Principal', 'Auxiliar'];
+        const LH = 17, LX = 8, LY0 = W - phases.length * LH - 6;
+        ctx.font = `${Math.max(8, W * 0.026)}px Segoe UI, sans-serif`;
         phases.forEach((ph, i) => {
             const col = PH_COL[ph];
-            const ry  = legendY0 + i * lineH;
             ctx.fillStyle = col.fill;
-            ctx.fillRect(legendX0, ry, sqSize, sqSize);
+            ctx.fillRect(LX, LY0 + i * LH, 10, 10);
             ctx.strokeStyle = col.stroke;
             ctx.lineWidth = 0.8;
-            ctx.strokeRect(legendX0, ry, sqSize, sqSize);
+            ctx.strokeRect(LX, LY0 + i * LH, 10, 10);
             ctx.fillStyle = col.label;
             ctx.textAlign = 'left';
-            ctx.textBaseline = 'top';
-            ctx.fillText(labels[i], legendX0 + sqSize + 4, ry + 1);
+            ctx.fillText(labels[i], LX + 14, LY0 + i * LH + 6);
         });
-
-        // Mostrar hint de zoom al tener contenido
-        const hint = document.getElementById('statorZoomHint');
-        if (hint) hint.style.display = 'inline';
     }
 
     // =========================================================================
@@ -3552,156 +3353,17 @@
     function _vis(id, show) { const el = document.getElementById(id); if (el) el.style.display = show ? 'block' : 'none'; }
     function _clrCanvas(id) { const c = document.getElementById(id); if (!c) return; const ctx = c.getContext('2d'); ctx.clearRect(0,0,c.width,c.height); }
 
-    // =========================================================================
-    // ── MODAL ZOOM: Sección Transversal del Estátor ───────────────────────────
-    // =========================================================================
-    // Nota: el script carga con defer — el DOM ya está listo, sin DOMContentLoaded
-    (function () {
-        let _hiResCanvas  = null;
-        let _hiResSize    = 0;
-
-        const st = {          // estado del modal
-            scale: 1, minScale: 1, maxScale: 8,
-            ox: 0, oy: 0,     // offset de pan
-            dragging: false, startX: 0, startY: 0, originX: 0, originY: 0,
-        };
-
-        // ── render ────────────────────────────────────────────────────────────
-        function render() {
-            const mc = document.getElementById('statorModalCanvas');
-            if (!mc || !_hiResCanvas) return;
-            const ctx = mc.getContext('2d');
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-            ctx.clearRect(0, 0, mc.width, mc.height);
-            ctx.fillStyle = 'rgba(15,23,42,1)';
-            ctx.fillRect(0, 0, mc.width, mc.height);
-
-            const fit = Math.min(mc.width, mc.height);   // el estátor cabe en el lado menor
-            const base = fit / _hiResSize;               // escala para llenarlo con scale=1
-            const s  = st.scale * base;
-            ctx.save();
-            ctx.translate(mc.width / 2 + st.ox, mc.height / 2 + st.oy);
-            ctx.scale(s, s);
-            ctx.drawImage(_hiResCanvas, -_hiResSize / 2, -_hiResSize / 2, _hiResSize, _hiResSize);
-            ctx.restore();
-        }
-
-        function updateLabel() {
-            const lbl = document.getElementById('statorZoomLabel');
-            if (lbl) lbl.textContent = Math.round(st.scale * 100) + '%';
-        }
-
-        // ── Abrir ─────────────────────────────────────────────────────────────
-        window.statorModalOpen = function () {
-            if (!_lastStatorResults) return;
-            const modal = document.getElementById('statorModal');
-            if (!modal) return;
-            modal.style.display = 'flex';
-
-            requestAnimationFrame(function () {
-                const mc   = document.getElementById('statorModalCanvas');
-                const area = mc && mc.parentElement;
-                if (!mc || !area) return;
-
-                const W = area.clientWidth  || 700;
-                const H = area.clientHeight || 700;
-                mc.width  = W;  mc.height  = H;
-                mc.style.width = W + 'px';  mc.style.height = H + 'px';
-
-                // hi-res cuadrado = lado menor del área (el estátor es circular, encaja en cuadrado)
-                // Usamos el lado menor para que el estátor llene el área visible sin recortarse
-                _hiResSize = Math.min(W, H);
-                const oc = document.createElement('canvas');
-                oc.width = oc.height = _hiResSize;
-                _drawStator(_lastStatorResults, oc, _hiResSize);
-                _hiResCanvas = oc;
-                // Si el área es más ancha que alta, el hi-res cubre exactamente la altura
-                // Si es más alta que ancha, cubre exactamente el ancho
-
-                st.scale = 1;  st.ox = 0;  st.oy = 0;
-                render();
-                updateLabel();
-            });
-        };
-
-        // ── Cerrar ────────────────────────────────────────────────────────────
-        window.statorModalClose = function () {
-            const modal = document.getElementById('statorModal');
-            if (modal) modal.style.display = 'none';
-        };
-
-        // ── Reset zoom ────────────────────────────────────────────────────────
-        window.statorModalResetZoom = function () {
-            st.scale = 1;  st.ox = 0;  st.oy = 0;
-            render();  updateLabel();
-        };
-
-        // ── Eventos — se registran directamente (script es defer, DOM ya listo) ──
-        const mc = document.getElementById('statorModalCanvas');
-        if (mc) {
-            mc.addEventListener('wheel', function (e) {
-                e.preventDefault();
-                const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
-                const newScale = Math.min(st.maxScale, Math.max(st.minScale, st.scale * factor));
-                const rect = mc.getBoundingClientRect();
-                const mx = e.clientX - rect.left - mc.width  / 2;
-                const my = e.clientY - rect.top  - mc.height / 2;
-                st.ox = mx + (st.ox - mx) * (newScale / st.scale);
-                st.oy = my + (st.oy - my) * (newScale / st.scale);
-                st.scale = newScale;
-                render();  updateLabel();
-            }, { passive: false });
-
-            mc.addEventListener('pointerdown', function (e) {
-                mc.setPointerCapture(e.pointerId);
-                st.dragging = true;
-                st.startX = e.clientX;  st.startY = e.clientY;
-                st.originX = st.ox;     st.originY = st.oy;
-                mc.style.cursor = 'grabbing';
-            });
-            mc.addEventListener('pointermove', function (e) {
-                if (!st.dragging) return;
-                st.ox = st.originX + (e.clientX - st.startX);
-                st.oy = st.originY + (e.clientY - st.startY);
-                render();
-            });
-            mc.addEventListener('pointerup', function () {
-                st.dragging = false;
-                mc.style.cursor = 'grab';
-            });
-            mc.addEventListener('dblclick', window.statorModalResetZoom);
-        }
-
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') window.statorModalClose();
-        });
-
-        const modal = document.getElementById('statorModal');
-        if (modal) {
-            modal.addEventListener('click', function (e) {
-                if (e.target === modal) window.statorModalClose();
-            });
-        }
-
-        const statorCanvas = document.getElementById('motorStatorCanvas');
-        if (statorCanvas) {
-            statorCanvas.addEventListener('click', function () {
-                if (statorCanvas.width > 0) window.statorModalOpen();
-            });
-        }
-    })();
-
     // ── Inicialización ────────────────────────────────────────────────────────
-    // defer: el DOM ya está listo al ejecutarse este script
-    (function () {
+    document.addEventListener('DOMContentLoaded', function () {
+        // Activar sección de acero personalizado
         const steelSel = document.getElementById('motorSteelType');
         if (steelSel) {
             steelSel.addEventListener('change', function () {
                 _vis('customSteelSection', this.value === 'custom_steel');
             });
         }
+        // Renderizar diagrama SVG inicial
         motorUpdateSlotDiagram();
-    }());
+    });
 
 })();
