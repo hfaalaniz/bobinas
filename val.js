@@ -317,6 +317,26 @@ class ValidationSystem {
             this.warnings.push('Potencia muy alta (>10kW). Requiere diseño térmico especializado');
         }
 
+        const Bt = Number(params?.Bt ?? params?.B_tooth ?? params?.bt);
+        const Ku = Number(params?.Ku ?? params?.fillFactor ?? params?.ku);
+        const J = Number(params?.J ?? params?.currentDensity ?? params?.j);
+
+        if (Number.isFinite(Bt)) {
+            if (Bt >= 1.8) this.errors.push('Bt diente >= 1.8 T. Riesgo alto de saturación.');
+            else if (Bt > 1.6) this.warnings.push('Bt diente > 1.6 T. Se acerca a saturación.');
+        }
+
+        if (Number.isFinite(Ku)) {
+            const kuNorm = Ku > 1 ? Ku / 100 : Ku;
+            if (kuNorm >= 0.60) this.errors.push('Factor de llenado Ku >= 60%. Bobinado inviable o muy riesgoso.');
+            else if (kuNorm > 0.50) this.warnings.push('Factor de llenado Ku > 50%. Bobinado difícil.');
+        }
+
+        if (Number.isFinite(J)) {
+            if (J > 6) this.errors.push('Densidad de corriente J > 6 A/mm². Sobrecalentamiento probable.');
+            else if (J > 4.5) this.warnings.push('Densidad de corriente J > 4.5 A/mm². Margen térmico reducido.');
+        }
+
         // Validar compatibilidad frecuencia-núcleo
         this.validateCoreFrequencyMatch(coreType, frequency);
 

@@ -165,7 +165,7 @@ function calculateToroidInductor(L, I, coreType, wireGauge, od, id, h, customMu,
 
     // Factor de llenado — área disponible = ventana interior del toroide
     // Para un toroide, la ventana es el agujero circular interior: π × (ID/2)²
-    const windowArea = Math.PI * Math.pow(ID / 2, 2); // m²
+    const windowArea = 0.35 * Math.PI * Math.pow(ID / 2, 2); // m²
     // Área de cobre por vuelta (sección circular del hilo con factor de apilamiento 1.1)
     const wireArea_m2 = Math.PI * Math.pow((wire.diameter / 1000) / 2, 2); // m²
     const usedArea  = turns * wireArea_m2 * 1.1; // factor 1.1 por aislante
@@ -651,7 +651,7 @@ function calculateTransformer() {
         const currentDensitySecondary = iSecondary / (wireSecondary.area * 1e-6);
         
         // === PASO 14: FACTOR DE LLENADO ===
-        const windowArea = Ae * 2;
+        const windowArea = 2.5 * Math.sqrt(Ae) * 100;
         const copperAreaPrimary = nPrimary * Math.PI * Math.pow(wirePrimary.diameter / 2000, 2);
         const copperAreaSecondary = nSecondaryAdjusted * Math.PI * Math.pow(wireSecondary.diameter / 2000, 2);
         const totalCopperArea = copperAreaPrimary + copperAreaSecondary;

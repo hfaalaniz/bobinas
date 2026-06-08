@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asistente Avanzado de Bobinados Monofásicos</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f7f6; color: #333; margin: 0; padding: 20px; }
+        .container { max-width: 750px; background: #fff; margin: 0 auto; padding: 25px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #2c3e50; font-size: 24px; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        h2 { font-size: 18px; color: #2980b9; margin-top: 20px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
+        label { font-weight: bold; font-size: 14px; display: block; margin-bottom: 5px; }
+        input, select { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
+        button { width: 100%; padding: 12px; background-color: #3498db; border: none; border-radius: 4px; color: white; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 20px; transition: background 0.3s; }
+        button:hover { background-color: #2980b9; }
+        .result-box { margin-top: 25px; padding: 15px; border-radius: 5px; display: none; }
+        .success { background-color: #e8f8f5; border-left: 5px solid #2ecc71; }
+        .warning { background-color: #fef9e7; border-left: 5px solid #f1c40f; }
+        .danger { background-color: #fdf2e9; border-left: 5px solid #e67e22; }
+        .alert-factor { font-weight: bold; color: #c0392b; }
+        .solucion-caja { background: #f2f4f4; padding: 10px; border-radius: 4px; margin-top: 10px; border-left: 3px solid #34495e; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Asistente Técnico de Bobinados Avanzado</h1>
+    
+    <h2>1. Datos Eléctricos de Placa</h2>
+    <div class="grid">
+        <div>
+            <label for="potencia">Potencia (HP):</label>
+            <select id="potencia">
+                <option value="0.25">1/4 HP</option>
+                <option value="0.50" selected>1/2 HP</option>
+                <option value="1.00">1 HP</option>
+                <option value="2.00">2 HP</option>
+                <option value="3.00">3 HP</option>
+                <option value="5.00">5 HP</option>
+            </select>
+        </div>
+        <div>
+            <label for="voltaje">Voltaje de Línea (V):</label>
+            <select id="voltaje">
+                <option value="220" selected>220 V</option>
+                <option value="110">110 V</option>
+            </select>
+        </div>
+        <div>
+            <label for="polos">Polos / RPM:</label>
+            <select id="polos">
+                <option value="2">2 Polos (~3000 RPM)</option>
+                <option value="4" selected>4 Polos (~1500 RPM)</option>
+            </select>
+        </div>
+        <div>
+            <label for="frecuencia">Frecuencia (Hz):</label>
+            <select id="frecuencia">
+                <option value="50" selected>50 Hz</option>
+                <option value="60">60 Hz</option>
+            </select>
+        </div>
+    </div>
+
+    <h2>2. Geometría del Núcleo Estator (mm)</h2>
+    <div class="grid">
+        <div>
+            <label for="ranuras">Número de Ranuras:</label>
+            <select id="ranuras">
+                <option value="24" selected>24 Ranuras</option>
+                <option value="36">36 Ranuras</option>
+            </select>
+        </div>
+        <div>
+            <label for="diametro">Diámetro Interno D (mm):</label>
+            <input type="number" id="diametro" step="1" value="65">
+        </div>
+        <div>
+            <label for="largo">Largo Axial del Hierro L (mm):</label>
+            <input type="number" id="largo" step="1" value="60">
+        </div>
+    </div>
+
+    <h2>3. Espacio Crítico de la Ranura (mm)</h2>
+    <div class="grid">
+        <div>
+            <label for="prof_ranura">Profundidad de la Ranura (mm):</label>
+            <input type="number" id="prof_ranura" step="0.1" value="15.0">
+        </div>
+        <div>
+            <label for="ancho_ranura">Ancho Medio de la Ranura (mm):</label>
+            <input type="number" id="ancho_ranura" step="0.1" value="6.0">
+        </div>
+    </div>
+
+    <button onclick="calcularBobinado()">Calcular Diseño y Factor de Llenado</button>
+
+    <div id="resultados" class="result-box"></div>
+</div>
+
+<script>
+const tablaAWG = [
+    { awg: 14, diametro_mm: 1.63, seccion_mm2: 2.08 },
+    { awg: 15, diametro_mm: 1.45, seccion_mm2: 1.65 },
+    { awg: 16, diametro_mm: 1.29, seccion_mm2: 1.31 },
+    { awg: 17, diametro_mm: 1.15, seccion_mm2: 1.04 },
+    { awg: 18, diametro_mm: 1.02, seccion_mm2: 0.823 },
+    { awg: 19, diametro_mm: 0.91, seccion_mm2: 0.653 },
+    { awg: 20, diametro_mm: 0.81, seccion_mm2: 0.518 },
+    { awg: 21, diametro_mm: 0.72, seccion_mm2: 0.410 },
+    { awg: 22, diametro_mm: 0.64, seccion_mm2: 0.324 },
+    { awg: 23, diametro_mm: 0.57, seccion_mm2: 0.258 },
+    { awg: 24, diametro_mm: 0.51, seccion_mm2: 0.205 },
+    { awg: 25, diametro_mm: 0.45, seccion_mm2: 0.162 },
+    { awg: 26, diametro_mm: 0.40, seccion_mm2: 0.128 }
+];
+
+function buscarAWG(seccionRequerida) {
+    let opt = tablaAWG[tablaAWG.length - 1]; 
+    for (let i = 0; i < tablaAWG.length; i++) {
+        if (tablaAWG[i].seccion_mm2 >= seccionRequerida) {
+            opt = tablaAWG[i];
+        } else {
+            break;
+        }
+    }
+    return opt;
+}
+
+function obtenerPasos(ranuras, polos) {
+    if (ranuras === 24 && polos === 2) {
+        return { trabajo: "1-6, 1-8, 1-10, 1-12", arranque: "1-10, 1-12" };
+    } else if (ranuras === 24 && polos === 4) {
+        return { trabajo: "1-4, 1-6", arranque: "1-5, 1-6" };
+    } else if (ranuras === 36 && polos === 2) {
+        return { trabajo: "1-12, 1-14, 1-16, 1-18", arranque: "1-14, 1-16, 1-18" };
+    } else if (ranuras === 36 && polos === 4) {
+        return { trabajo: "1-6, 1-8, 1-10", arranque: "1-8, 1-10" };
+    }
+    return { trabajo: "No estándar", arranque: "No estándar" };
+}
+function calcularBobinado() {
+    const hp = parseFloat(document.getElementById('potencia').value);
+    const v = parseFloat(document.getElementById('voltaje').value);
+    const polos = parseInt(document.getElementById('polos').value);
+    const hz = parseInt(document.getElementById('frecuencia').value);
+    const ranuras = parseInt(document.getElementById('ranuras').value);
+    const D_mm = parseFloat(document.getElementById('diametro').value);
+    const L_mm = parseFloat(document.getElementById('largo').value);
+    const h_ranura_mm = parseFloat(document.getElementById('prof_ranura').value);
+    const w_ranura_mm = parseFloat(document.getElementById('ancho_ranura').value);
+
+    const eficiencia = 0.75;
+    const cos_phi = 0.78;
+    const densidad_corriente = 4.0; 
+
+    const vatios = hp * 746;
+    const corriente = vatios / (v * eficiencia * cos_phi);
+
+    const seccion_trabajo = corriente / densidad_corriente;
+    const seccion_arranque = (corriente * 0.45) / densidad_corriente;
+
+    const alambreTrabajo = buscarAWG(seccion_trabajo);
+    const alambreArranque = buscarAWG(seccion_arranque);
+
+    const D_cm = D_mm / 10;
+    const L_cm = L_mm / 10;
+    let vueltasTrabajoBase = Math.round((220 / v) * (45 * (6.5 / D_cm) * (6.0 / L_cm) * (polos / 4)));
+    if (vueltasTrabajoBase < 20) vueltasTrabajoBase = 25; 
+    const vueltasArranqueBase = Math.round(vueltasTrabajoBase * 1.4);
+
+    const area_ranura_mm2 = h_ranura_mm * w_ranura_mm;
+    const hilos_trabajo_en_ranura = vueltasTrabajoBase * 2; 
+    const hilos_arranque_en_ranura = vueltasArranqueBase;
+    
+    let area_cobre_total_mm2 = (hilos_trabajo_en_ranura * alambreTrabajo.seccion_mm2) + (hilos_arranque_en_ranura * alambreArranque.seccion_mm2);
+    let factor_llenado = (area_cobre_total_mm2 / area_ranura_mm2) * 100;
+
+    const cap_marcha = Math.round(((3180 * corriente * cos_phi) / (v * hz)) * 10) / 10;
+    const cap_arranque = Math.round(cap_marcha * 4.5);
+
+    const pasosObtenidos = obtenerPasos(ranuras, polos);
+
+    const resDiv = document.getElementById('resultados');
+    resDiv.style.display = 'block';
+
+    let htmlResultados = `
+        <h3>Resultados Técnicos del Cálculo:</h3>
+        <p><strong>Corriente Nominal Estimada:</strong> ${corriente.toFixed(2)} A</p>
+        <p><strong>Capacitor de Marcha sugerido:</strong> ${cap_marcha.toFixed(1)} µF / 400V (Permanente)</p>
+        <p><strong>Capacitor de Arranque sugerido:</strong> ${cap_arranque} µF / 250V (Electrolítico)</p>
+        <hr>
+        <p><strong>Bobinado de TRABAJO (Principal):</strong></p>
+        <ul>
+            <li>Calibre Unifilar Sugerido: <strong>AWG ${alambreTrabajo.awg}</strong> (Ø ${alambreTrabajo.diametro_mm} mm)</li>
+            <li>Espiras por ranura: <strong>${vueltasTrabajoBase} vueltas</strong></li>
+            <li>Pasos Concéntricos: <strong>${pasosObtenidos.trabajo}</strong></li>
+        </ul>
+        <p><strong>Bobinado de ARRANQUE (Auxiliar):</strong></p>
+        <ul>
+            <li>Calibre Sugerido: <strong>AWG ${alambreArranque.awg}</strong> (Ø ${alambreArranque.diametro_mm} mm)</li>
+            <li>Espiras por ranura: <strong>${vueltasArranqueBase} vueltas</strong></li>
+            <li>Pasos Concéntricos: <strong>${pasosObtenidos.arranque}</strong></li>
+        </ul>
+        <hr>
+        <h3>Análisis de Espacio y Llenado en Ranura:</h3>
+        <p>Área útil de la ranura física: <strong>${area_ranura_mm2.toFixed(1)} mm²</strong></p>
+        <p>Área del cobre calculado: <strong>${area_cobre_total_mm2.toFixed(1)} mm²</strong></p>
+        <p>Factor de Llenado Inicial: <strong class="${factor_llenado > 40 ? 'alert-factor' : ''}">${factor_llenado.toFixed(1)}%</strong></p>
+    `;
+
+    if (factor_llenado <= 40) {
+        resDiv.className = "result-box success";
+        htmlResultados += `<p style="color: #27ae60; font-weight:bold;">✔ ¡Diseño seguro! El alambre se alojará perfectamente en el espacio disponible.</p>`;
+    } else if (factor_llenado > 40 && factor_llenado <= 50) {
+        resDiv.className = "result-box warning";
+        htmlResultados += `<p style="color: #d4ac0d; font-weight:bold;">⚠ ¡Espacio Crítico! El alambre entrará muy justo. Requiere un excelente acomodo manual.</p>`;
+    } else {
+        resDiv.className = "result-box danger";
+        
+        const seccion_un_hilo_paralelo = alambreTrabajo.seccion_mm2 / 2;
+        const alambreParalelo = buscarAWG(seccion_un_hilo_paralelo);
+        const nuevo_area_cobre = ((hilos_trabajo_en_ranura * 2) * alambreParalelo.seccion_mm2) + (hilos_arranque_en_ranura * alambreArranque.seccion_mm2);
+        const nuevo_factor = (nuevo_area_cobre / area_ranura_mm2) * 100;
+
+        htmlResultados += `
+            <p style="color: #c0392b; font-weight:bold;">❌ ¡Exceso de volumen! El cobre unifilar no entrará en la ranura física.</p>
+            <div class="solucion-caja">
+                <h4>🛠 SOLUCIÓN RECOMENDADA EN TALLER:</h4>
+                <p>Para corregir el factor de llenado y reducirlo a un nivel seguro (<strong>${nuevo_factor.toFixed(1)}%</strong>), debes sustituir el alambre de Trabajo único por <strong>2 hilos en paralelo</strong>:</p>
+                <ul>
+                    <li>Reemplazar 1 alambre AWG ${alambreTrabajo.awg} por <strong>2 alambres juntos de calibre AWG ${alambreParalelo.awg}</strong> (Ø ${alambreParalelo.diametro_mm} mm).</li>
+                    <li>Mantener exactamente las mismas <strong>${vueltasTrabajoBase} vueltas</strong> contando el par de hilos como uno solo al bobinar.</li>
+                </ul>
+            </div>
+        `;
+    }
+
+    resDiv.innerHTML = htmlResultados;
+}
+</script>
+</body>
+</html>
