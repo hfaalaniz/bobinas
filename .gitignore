@@ -1,0 +1,5 @@
+# Archivos binarios grandes — no versionar
+*.pdf
+*.rar
+*.zip
+revistas/
