@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bobinados Trifásicos — Calculadora NEMA 50 Hz</title>
+<style>
+:root {
+    --bg:#f0f4f8; --card:#ffffff; --border:#cbd5e1;
+    --primary:#1d4ed8; --plight:#eff6ff;
+    --text:#1e293b; --muted:#64748b;
+    --green:#16a34a; --yellow:#ca8a04; --red:#dc2626; --orange:#ea580c;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);padding:20px;}
+.page{max-width:940px;margin:0 auto;}
+h1{font-size:1.3rem;font-weight:700;color:var(--primary);text-align:center;margin-bottom:3px;}
+.subtitle{text-align:center;font-size:.82rem;color:var(--muted);margin-bottom:18px;}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:14px;}
+.card-title{font-size:.73rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--primary);margin-bottom:14px;display:flex;align-items:center;gap:6px;}
+
+/* Selector NEMA */
+.nema-bar{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;}
+.nema-bar .fg{display:flex;flex-direction:column;gap:5px;flex:1;min-width:130px;}
+.nema-bar label,.field label{font-size:.74rem;font-weight:600;color:var(--muted);}
+select,input[type=number]{padding:9px 10px;border:1px solid var(--border);border-radius:7px;font-size:.9rem;color:var(--text);background:#fff;width:100%;transition:border-color .2s;}
+select:focus,input:focus{outline:none;border-color:var(--primary);}
+.btn-load{padding:9px 18px;background:var(--primary);color:#fff;border:none;border-radius:7px;font-size:.84rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+.btn-load:hover{background:#1e40af;}
+#nema-loaded{font-size:.77rem;color:var(--green);margin-top:8px;display:none;line-height:1.5;}
+
+/* Tabla referencia */
+.ref-table{width:100%;border-collapse:collapse;font-size:.77rem;margin-top:8px;}
+.ref-table th{background:var(--plight);color:var(--primary);font-weight:700;padding:6px 8px;text-align:left;border-bottom:2px solid var(--border);}
+.ref-table td{padding:5px 8px;border-bottom:1px solid #f1f5f9;}
+.ref-table tr.sel-row{background:#dbeafe;font-weight:600;}
+.ref-table tr:hover{background:#f8fafc;}
+
+/* Grillas */
+.fg2{display:grid;grid-template-columns:1fr 1fr;gap:13px;}
+.fg3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:13px;}
+.fg4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:13px;}
+.field{display:flex;flex-direction:column;gap:5px;}
+.field .hint{font-size:.68rem;color:var(--muted);margin-top:1px;}
+
+/* Diagrama ranura */
+.ranura-wrap{display:flex;gap:18px;align-items:flex-start;}
+.ranura-svg{flex-shrink:0;}
+
+/* Botón calcular */
+.btn-calc{width:100%;padding:13px;background:linear-gradient(135deg,#1d4ed8,#7c3aed);color:#fff;border:none;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer;margin-top:4px;transition:opacity .2s;}
+.btn-calc:hover{opacity:.9;}
+
+/* Resultados */
+#resultados{display:none;}
+.res-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:13px;}
+.res-block{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:15px;}
+.res-block-title{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:10px;}
+.res-row{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;border-bottom:1px dashed var(--border);font-size:.82rem;gap:8px;}
+.res-row:last-child{border:none;}
+.res-row span{color:var(--muted);flex-shrink:0;}
+.res-val{font-weight:700;color:var(--text);text-align:right;}
+.res-hi{background:#f0fdf4;border-radius:5px;padding:5px 6px;}
+
+/* Factor de llenado */
+.ku-wrap{margin-top:13px;}
+.ku-bar-bg{height:14px;background:#e2e8f0;border-radius:7px;overflow:hidden;margin:8px 0 4px;}
+.ku-bar{height:100%;border-radius:7px;transition:width .5s;}
+.ku-legend{display:flex;justify-content:space-between;font-size:.67rem;color:var(--muted);}
+.ku-detail{font-size:.75rem;color:var(--muted);margin-top:9px;line-height:1.8;background:#f8fafc;border-radius:6px;padding:9px 11px;border:1px solid var(--border);}
+.ku-detail b{color:var(--text);}
+
+.badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:.72rem;font-weight:700;}
+.badge-ok    {background:#dcfce7;color:#15803d;}
+.badge-good  {background:#dbeafe;color:#1d4ed8;}
+.badge-warn  {background:#fef9c3;color:#854d0e;}
+.badge-danger{background:#fee2e2;color:#991b1b;}
+
+.alerta{padding:9px 13px;border-radius:7px;font-size:.81rem;margin-top:8px;line-height:1.5;}
+.alerta-warn{background:#fefce8;border:1px solid #fde047;color:#713f12;}
+.alerta-ok  {background:#f0fdf4;border:1px solid #86efac;color:#14532d;}
+.alerta-info{background:#eff6ff;border:1px solid #93c5fd;color:#1e3a8a;}
+
+/* Fuente del método */
+.metodo-ref{font-size:.72rem;color:var(--muted);text-align:right;margin-top:4px;}
+
+details summary{font-size:.77rem;color:var(--primary);cursor:pointer;user-select:none;}
+
+/* Panel datos de placa */
+.pl-stat{background:var(--surface2,#f1f5f9);border-radius:7px;padding:8px 11px;
+         display:flex;flex-direction:column;gap:2px;}
+.pl-stat-lbl{font-size:.72rem;color:var(--muted,#64748b);}
+.pl-stat-val{font-size:.95rem;font-weight:700;color:var(--primary,#0f172a);}
+
+@media(max-width:620px){.fg2,.fg3,.fg4{grid-template-columns:1fr;}.ranura-wrap{flex-direction:column;}}
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>⚙️ Cálculo de Bobinados Trifásicos</h1>
+<p class="subtitle">Método: "Cálculo de bobinados trifásicos" · NEMA 50 Hz · 2 a 8 Polos</p>
+
+<!-- ══ 1. SELECTOR NEMA ══ -->
+<div class="card">
+  <div class="card-title">📋 1. Cargar datos desde tabla NEMA (50 Hz)</div>
+  <div class="nema-bar">
+    <div class="fg">
+      <label>Polos</label>
+      <select id="nema-polos" onchange="actualizarOpciones()">
+        <option value="2">2 Polos — ~3000 RPM</option>
+        <option value="4" selected>4 Polos — ~1500 RPM</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label>Potencia / Carcasa</label>
+      <select id="nema-rango"></select>
+    </div>
+    <button class="btn-load" onclick="cargarNEMA()">↓ Cargar datos</button>
+  </div>
+  <div id="nema-loaded"></div>
+  <details style="margin-top:13px">
+    <summary>Ver tabla completa NEMA 50 Hz</summary>
+    <div style="overflow-x:auto;margin-top:9px"><table class="ref-table" id="ref-table"></table></div>
+  </details>
+</div>
+
+<!-- ══ 2. GEOMETRÍA DEL NÚCLEO ══ -->
+<div class="card">
+  <div class="card-title">⚙️ 2. Dimensiones del Núcleo</div>
+  <div class="fg4" style="margin-bottom:13px">
+    <div class="field">
+      <label>Polos (P)</label>
+      <select id="polos" onchange="actualizarPasos()">
+        <option value="2">2 Polos</option><option value="4" selected>4 Polos</option>
+        <option value="6">6 Polos</option><option value="8">8 Polos</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Ranuras totales (Z)</label>
+      <input type="number" id="ranuras" value="36" min="12" step="1" onchange="actualizarPasos()">
+    </div>
+    <div class="field">
+      <label>Diám. Exterior OD (mm)</label>
+      <input type="number" id="dext" step="0.1" value="200">
+    </div>
+    <div class="field">
+      <label>Diám. Interior ID (mm)</label>
+      <input type="number" id="dint" step="0.1" value="104.8">
+      <span class="hint">Di en cm en la fórmula</span>
+    </div>
+  </div>
+  <div class="fg4">
+    <div class="field">
+      <label>Longitud paquete L (mm)</label>
+      <input type="number" id="largo" step="0.1" value="148.6">
+      <span class="hint">L en cm en la fórmula</span>
+    </div>
+    <div class="field">
+      <label>Capas (k)</label>
+      <select id="capas">
+        <option value="1" selected>k=1 · Doble capa (2 haces/ranura)</option>
+        <option value="2">k=2 · Una capa (1 haz/ranura)</option>
+      </select>
+      <span class="hint">k=1 es lo habitual en trifásico</span>
+    </div>
+    <div class="field">
+      <label>Ramas en paralelo (k₁)</label>
+      <select id="k1">
+        <option value="1" selected>1 rama</option>
+        <option value="2">2 ramas</option>
+        <option value="3">3 ramas</option>
+        <option value="4">4 ramas</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Conexión (k₂)</label>
+      <select id="k2">
+        <option value="1.73" selected>Estrella Y (k₂=1.73)</option>
+        <option value="1">Triángulo Δ (k₂=1)</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DATOS DE PLACA (colapsable) ══ -->
+<details class="card" id="card-placa" open>
+  <summary class="card-title" style="cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center">
+    <span>🏷️ Datos de Placa — Calcular I y δ automáticamente</span>
+    <span style="font-size:.75rem;font-weight:400;color:var(--muted)">▼ colapsar</span>
+  </summary>
+  <div style="margin-top:12px">
+    <p class="metodo-ref" style="margin-bottom:12px">
+      Si no tenés los datos eléctricos del bobinado, ingresá los datos de la placa del motor y se calcularán automáticamente la corriente de fase y la densidad de corriente recomendada.
+    </p>
+    <div class="fg4">
+      <div class="field">
+        <label>Potencia (HP)</label>
+        <input type="number" id="pl-hp" step="0.25" value="5" oninput="calcularDesdePlaca()">
+      </div>
+      <div class="field">
+        <label>Tensión de línea (V)</label>
+        <input type="number" id="pl-v" step="1" value="220" oninput="calcularDesdePlaca()">
+      </div>
+      <div class="field">
+        <label>cos φ</label>
+        <input type="number" id="pl-cosfi" step="0.01" min="0.5" max="1" value="0.85" oninput="calcularDesdePlaca()">
+        <span class="hint">Si no figura: 0.85</span>
+      </div>
+      <div class="field">
+        <label>Rendimiento η</label>
+        <input type="number" id="pl-eta" step="0.01" min="0.5" max="1" value="0.88" oninput="calcularDesdePlaca()">
+        <span class="hint">Si no figura: 0.88</span>
+      </div>
+    </div>
+    <div class="fg4" style="margin-top:10px">
+      <div class="field">
+        <label>Conexión</label>
+        <select id="pl-conn" onchange="calcularDesdePlaca()">
+          <option value="Y" selected>Estrella Y</option>
+          <option value="D">Triángulo Δ</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Frecuencia (Hz)</label>
+        <input type="number" id="pl-freq" step="1" value="50" oninput="calcularDesdePlaca()">
+      </div>
+      <div class="field">
+        <label>RPM nominales</label>
+        <input type="number" id="pl-rpm" step="1" value="1440" oninput="calcularDesdePlaca()">
+        <span class="hint">Para estimar polos</span>
+      </div>
+      <div></div>
+    </div>
+
+    <!-- Resultado calculado -->
+    <div id="pl-resultado" style="display:none;margin-top:14px;padding:12px 16px;
+         background:var(--surface2);border:1px solid var(--border);border-radius:9px">
+      <div style="font-size:.78rem;font-weight:700;color:var(--acc);margin-bottom:10px;
+                  text-transform:uppercase;letter-spacing:.04em">⚡ Valores derivados desde placa</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:12px">
+        <div class="pl-stat"><span class="pl-stat-lbl">Polos estimados</span><b class="pl-stat-val" id="pl-r-polos">—</b></div>
+        <div class="pl-stat"><span class="pl-stat-lbl">Potencia</span><b class="pl-stat-val" id="pl-r-kw">—</b></div>
+        <div class="pl-stat"><span class="pl-stat-lbl">Corriente de línea I<sub>L</sub></span><b class="pl-stat-val" id="pl-r-iline">—</b></div>
+        <div class="pl-stat"><span class="pl-stat-lbl">Corriente de fase I<sub>f</sub></span><b class="pl-stat-val" id="pl-r-ifase">—</b></div>
+        <div class="pl-stat"><span class="pl-stat-lbl">Tensión de fase V<sub>f</sub></span><b class="pl-stat-val" id="pl-r-vfase">—</b></div>
+        <div class="pl-stat"><span class="pl-stat-lbl">δ recomendada</span><b class="pl-stat-val" id="pl-r-delta">—</b></div>
+      </div>
+      <button onclick="aplicarDesdePlaca()"
+              style="padding:8px 20px;background:var(--acc);color:#fff;border:none;
+                     border-radius:7px;font-size:.82rem;font-weight:700;cursor:pointer">
+        ↓ Aplicar en sección 3 (I y δ)
+      </button>
+      <span id="pl-aplicado" style="display:none;margin-left:12px;font-size:.78rem;
+            color:var(--green);font-weight:600">✓ Aplicado</span>
+    </div>
+  </div>
+</details>
+
+<!-- ══ 3. PARÁMETROS ELÉCTRICOS ══ -->
+<div class="card">
+  <div class="card-title">⚡ 3. Parámetros Eléctricos</div>
+  <div class="fg4">
+    <div class="field">
+      <label>Tensión de red V (V)</label>
+      <input type="number" id="voltaje" value="220">
+    </div>
+    <div class="field">
+      <label>Frecuencia f (Hz)</label>
+      <input type="number" id="freq" value="50">
+    </div>
+    <div class="field">
+      <label>Corriente de fase I (A)</label>
+      <input type="number" id="corriente" step="0.1" value="14.5">
+    </div>
+    <div class="field">
+      <label>Densidad corriente δ (A/mm²)</label>
+      <input type="number" id="densidad" step="0.1" value="5.5">
+      <span class="hint">≤10 HP: 7 · 10–50 HP: 5.5</span>
+    </div>
+  </div>
+  <div class="fg2" style="margin-top:13px">
+    <div class="field">
+      <label>Inducción B (KGs)</label>
+      <select id="B">
+        <option value="4">4 KGs — motor antiguo / núcleo saturado</option>
+        <option value="5" selected>5 KGs — motor moderno</option>
+      </select>
+      <span class="hint">1 KGs = 0.1 T · Rango típico 0.4–0.5 T</span>
+    </div>
+    <div class="field">
+      <label>Paso de bobina (ξ de tabla)</label>
+      <select id="paso-sel" style="font-size:.82rem"></select>
+      <span class="hint">Factor de bobinado ξ según "Calculo bobinados trifasicos.pdf"</span>
+    </div>
+  </div>
+  <p class="metodo-ref">Fórmulas: Zf = (50·V·k·k₁)/(2.22·φ·f·ξ·k₂) · S = (I·k₂)/(δ·1.73·k₁)</p>
+</div>
+
+<!-- ══ 4. GEOMETRÍA RANURA ══ -->
+<div class="card">
+  <div class="card-title">📐 4. Geometría de Ranura (medir con calibre)</div>
+  <div class="ranura-wrap">
+    <div class="ranura-svg">
+      <svg viewBox="0 0 120 195" width="105" height="170">
+        <rect x="0" y="0" width="120" height="195" fill="#f8fafc" rx="6"/>
+        <rect x="0" y="0" width="120" height="26" fill="#cbd5e1" rx="4"/>
+        <text x="60" y="17" text-anchor="middle" fill="#475569" font-size="8" font-family="monospace">corona (yoke)</text>
+        <rect x="0"  y="26" width="26" height="138" fill="#94a3b8"/>
+        <rect x="94" y="26" width="26" height="138" fill="#94a3b8"/>
+        <!-- ranura trapezoidal: b1 arriba (fondo), b0 abajo (boca) -->
+        <polygon points="26,26 94,26 82,164 38,164" fill="#1e293b" stroke="#3b82f6" stroke-width="1.5"/>
+        <!-- cuña -->
+        <polygon points="38,164 82,164 78,175 42,175" fill="#334155" stroke="#6366f1" stroke-width="1"/>
+        <!-- b0 boca -->
+        <line x1="42" y1="182" x2="78" y2="182" stroke="#f59e0b" stroke-width="1.5"/>
+        <line x1="42" y1="178" x2="42" y2="186" stroke="#f59e0b" stroke-width="1"/>
+        <line x1="78" y1="178" x2="78" y2="186" stroke="#f59e0b" stroke-width="1"/>
+        <text x="60" y="193" text-anchor="middle" fill="#d97706" font-size="8" font-family="monospace">b0 (boca)</text>
+        <!-- b1 fondo -->
+        <line x1="26" y1="33" x2="94" y2="33" stroke="#22d3ee" stroke-width="1.5"/>
+        <text x="60" y="44" text-anchor="middle" fill="#0891b2" font-size="8" font-family="monospace">b1 (fondo)</text>
+        <!-- h1 altura -->
+        <line x1="100" y1="26" x2="107" y2="26" stroke="#a78bfa" stroke-width="1"/>
+        <line x1="100" y1="164" x2="107" y2="164" stroke="#a78bfa" stroke-width="1"/>
+        <line x1="103" y1="26" x2="103" y2="164" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="117" y="100" text-anchor="middle" fill="#7c3aed" font-size="8" font-family="monospace" transform="rotate(90,117,100)">h1 (altura útil)</text>
+        <!-- cuña label -->
+        <text x="60" y="171" text-anchor="middle" fill="#818cf8" font-size="7" font-family="monospace">cuña</text>
+      </svg>
+    </div>
+    <div style="flex:1">
+      <div class="fg3" style="margin-bottom:13px">
+        <div class="field">
+          <label style="color:#d97706">Boca b0 (mm)</label>
+          <input type="number" id="b0" step="0.1" value="2.2" style="border-color:#fbbf24">
+          <span class="hint">abertura al entrehierro</span>
+        </div>
+        <div class="field">
+          <label style="color:#0891b2">Fondo b1 (mm)</label>
+          <input type="number" id="b1" step="0.1" value="6.25" style="border-color:#22d3ee">
+          <span class="hint">ancho máximo de ranura</span>
+        </div>
+        <div class="field">
+          <label style="color:#7c3aed">Altura útil h1 (mm)</label>
+          <input type="number" id="h1" step="0.5" value="14.75" style="border-color:#a78bfa">
+          <span class="hint">zona de conductores</span>
+        </div>
+      </div>
+      <div class="fg2">
+        <div class="field">
+          <label>Espesor papel aislante (mm)</label>
+          <input type="number" id="papel" step="0.05" value="0.25">
+          <span class="hint">prespan/nomex, por cara</span>
+        </div>
+        <div class="field">
+          <label>Espesor cuña de cierre (mm)</label>
+          <input type="number" id="cuna" step="0.1" value="1.0">
+          <span class="hint">se resta de h1</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<button class="btn-calc" onclick="calcular()">⚡ Calcular Bobinado</button>
+
+<!-- ══ RESULTADOS ══ -->
+<div id="resultados" style="margin-top:18px">
+  <div class="res-grid">
+
+    <!-- Bobinado (fórmulas PDF) -->
+    <div class="res-block">
+      <div class="res-block-title">📐 Cálculo según PDF</div>
+      <div class="res-row"><span>Paso polar tp</span><b id="r-tp" class="res-val">—</b></div>
+      <div class="res-row"><span>Flujo magnético φ</span><b id="r-phi" class="res-val">—</b></div>
+      <div class="res-row"><span>Factor de bobinado ξ</span><b id="r-xi" class="res-val">—</b></div>
+      <div class="res-row"><span>Espiras por fase Zf</span><b id="r-Zf" class="res-val">—</b></div>
+      <div class="res-row"><span>Espiras/bobina calculadas</span><b id="r-Nc" class="res-val">—</b></div>
+      <div class="res-row" id="r-Nc-adj-row"><span>Espiras/bobina (con acort.)</span><b id="r-Nc-adj" class="res-val">—</b></div>
+    </div>
+
+    <!-- Geometría núcleo -->
+    <div class="res-block">
+      <div class="res-block-title">⚙️ Geometría del Núcleo</div>
+      <div class="res-row"><span>Paso polar τp</span><b id="r-taup" class="res-val">—</b></div>
+      <div class="res-row"><span>q (ranuras/polo/fase)</span><b id="r-q" class="res-val">—</b></div>
+      <div class="res-row"><span>Perímetro interior</span><b id="r-perim" class="res-val">—</b></div>
+      <div class="res-row"><span>Área bruta ranura</span><b id="r-area-bruta" class="res-val">—</b></div>
+      <div class="res-row res-hi"><span><b>Área neta ranura</b></span><b id="r-area-neta" class="res-val" style="color:var(--green)">—</b></div>
+    </div>
+
+    <!-- Conductor -->
+    <div class="res-block">
+      <div class="res-block-title">🔌 Conductor de Cobre</div>
+      <div class="res-row"><span>Sección mínima S</span><b id="r-S" class="res-val">—</b></div>
+      <div class="res-row"><span>Calibre AWG</span><b id="r-awg" class="res-val">—</b></div>
+      <div class="res-row"><span>Ø cobre desnudo</span><b id="r-dcu" class="res-val">—</b></div>
+      <div class="res-row"><span>Ø con esmalte Gr.2</span><b id="r-desm" class="res-val">—</b></div>
+      <div class="res-row"><span>Área esmaltada A_esm</span><b id="r-aesm" class="res-val">—</b></div>
+    </div>
+
+    <!-- Longitud y masa -->
+    <div class="res-block">
+      <div class="res-block-title">📦 Longitud y Masa</div>
+      <div class="res-row"><span>Long. media de vuelta MTL</span><b id="r-mtl" class="res-val">—</b></div>
+      <div class="res-row"><span>Long. total de hilo</span><b id="r-ltot" class="res-val">—</b></div>
+      <div class="res-row"><span>Masa total de cobre</span><b id="r-peso" class="res-val">—</b></div>
+    </div>
+
+  </div>
+
+  <!-- Factor de llenado -->
+  <div class="card ku-wrap" style="margin-top:13px">
+    <div class="card-title">📊 Factor de Llenado de Ranura (Ku)</div>
+    <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+      <div style="font-size:2rem;font-weight:800" id="r-ku-pct">—</div>
+      <span id="r-ku-badge"></span>
+    </div>
+    <div class="ku-bar-bg"><div class="ku-bar" id="r-ku-bar" style="width:0%"></div></div>
+    <div class="ku-legend"><span>0%</span><span>30%</span><span>45%</span><span>55%</span><span>100%</span></div>
+    <div class="ku-detail" id="r-ku-detail"></div>
+  </div>
+
+  <!-- Hidden override fields (written by aplicarAlt / limpiarOverride) -->
+  <input type="hidden" id="awg-override" value="">
+  <input type="hidden" id="nc-override" value="">
+
+  <!-- Banner de alternativa activa -->
+  <div id="alt-banner" style="display:none;margin:12px 0 6px;padding:9px 14px;
+       background:#dbeafe;border:1px solid #93c5fd;border-radius:8px;
+       font-size:.82rem;font-weight:600;color:#1e3a8a;
+       justify-content:space-between;align-items:center">
+    <span id="alt-banner-text"></span>
+    <button onclick="limpiarOverride()"
+            style="background:none;border:1px solid #3b82f6;border-radius:5px;
+                   padding:3px 9px;font-size:.78rem;color:#1d4ed8;cursor:pointer">
+      ✕ Volver al automático
+    </button>
+  </div>
+
+  <!-- Alternativas para resolver Ku elevado -->
+  <div id="r-alternativas"></div>
+
+  <div id="r-alertas" style="margin-top:6px"></div>
+</div>
+
+</div><!-- /page -->
+
+<script src="motor-calculator.js"></script>
+<script>
+// ── Tabla NEMA 50 Hz ─────────────────────────────────────────────────────────
+const NEMA = {
+    2:[
+        {label:'1–2 HP',   carcasa:'143T–145T', dext:160, dint: 59.7, L: 91.5, Z:24, b0:2.0, b1: 5.75, h1:13.25},
+        {label:'3–5 HP',   carcasa:'182T–184T', dext:200, dint: 87.7, L:133.4, Z:36, b0:2.2, b1: 6.75, h1:15.50},
+        {label:'7.5–10 HP',carcasa:'213T–215T', dext:230, dint:104.8, L:163.9, Z:36, b0:2.4, b1: 7.75, h1:18.00},
+        {label:'15–25 HP', carcasa:'254T–256T', dext:280, dint:130.2, L:232.4, Z:48, b0:2.75,b1: 9.00, h1:21.00},
+        {label:'30–50 HP', carcasa:'284TS–286TS',dext:320,dint:162.0, L:304.8, Z:48, b0:3.0, b1:10.50, h1:24.25},
+    ],
+    4:[
+        {label:'1–2 HP',   carcasa:'143T–145T', dext:160, dint: 67.3, L:106.7, Z:36, b0:2.0, b1: 5.15, h1:12.50},
+        {label:'3–5 HP',   carcasa:'182T–184T', dext:200, dint:104.8, L:148.6, Z:36, b0:2.2, b1: 6.25, h1:14.75},
+        {label:'7.5–10 HP',carcasa:'213T–215T', dext:250, dint:123.9, L:198.1, Z:36, b0:2.4, b1: 7.25, h1:17.00},
+        {label:'15–25 HP', carcasa:'254T–256T', dext:300, dint:149.3, L:251.5, Z:48, b0:2.6, b1: 8.25, h1:19.75},
+        {label:'30–50 HP', carcasa:'284T–286T',  dext:360, dint:184.2, L:335.3, Z:48, b0:2.8, b1: 9.50, h1:23.00},
+    ]
+};
+
+function actualizarOpciones() {
+    const p = document.getElementById('nema-polos').value;
+    const sel = document.getElementById('nema-rango');
+    sel.innerHTML = NEMA[p].map((r,i)=>`<option value="${i}">${r.label} — ${r.carcasa}</option>`).join('');
+    renderTabla(p);
+}
+
+function renderTabla(p) {
+    const t = document.getElementById('ref-table');
+    t.innerHTML = `<thead><tr>
+        <th>Potencia</th><th>Carcasa</th><th>OD mm</th><th>ID mm</th>
+        <th>L mm</th><th>Z</th><th>b0</th><th>b1</th><th>h1</th>
+    </tr></thead><tbody>`+
+    NEMA[p].map((r,i)=>`<tr id="nref-${p}-${i}">
+        <td>${r.label}</td><td>${r.carcasa}</td><td>${r.dext}</td><td>${r.dint}</td>
+        <td>${r.L}</td><td>${r.Z}</td><td>${r.b0}</td><td>${r.b1}</td><td>${r.h1}</td>
+    </tr>`).join('')+'</tbody>';
+}
+
+function cargarNEMA() {
+    const p   = document.getElementById('nema-polos').value;
+    const idx = parseInt(document.getElementById('nema-rango').value);
+    const r   = NEMA[p][idx];
+    if (!r) return;
+    document.getElementById('polos').value   = p;
+    document.getElementById('dext').value    = r.dext;
+    document.getElementById('dint').value    = r.dint;
+    document.getElementById('largo').value   = r.L;
+    document.getElementById('ranuras').value = r.Z;
+    document.getElementById('b0').value      = r.b0;
+    document.getElementById('b1').value      = r.b1;
+    document.getElementById('h1').value      = r.h1;
+    actualizarPasos();
+    document.querySelectorAll('.ref-table tr').forEach(tr=>tr.classList.remove('sel-row'));
+    const fila = document.getElementById(`nref-${p}-${idx}`);
+    if (fila) fila.classList.add('sel-row');
+    const msg = document.getElementById('nema-loaded');
+    msg.style.display = 'block';
+    msg.innerHTML = `✓ Cargado: <b>${r.label} · ${p} polos · ${r.carcasa}</b> — Z=${r.Z}, OD=${r.dext} mm, ID=${r.dint} mm, L=${r.L} mm, b0=${r.b0} / b1=${r.b1} / h1=${r.h1} mm.<br>Ajuste con las medidas reales del motor.`;
+}
+
+// ── Datos de placa → calcular I y δ ──────────────────────────────────────────
+function calcularDesdePlaca() {
+    const hp    = parseFloat(document.getElementById('pl-hp')?.value)    || 0;
+    const V     = parseFloat(document.getElementById('pl-v')?.value)     || 0;
+    const cosfi = parseFloat(document.getElementById('pl-cosfi')?.value) || 0.85;
+    const eta   = parseFloat(document.getElementById('pl-eta')?.value)   || 0.88;
+    const conn  = document.getElementById('pl-conn')?.value              || 'Y';
+    const f     = parseFloat(document.getElementById('pl-freq')?.value)  || 50;
+    const rpm   = parseFloat(document.getElementById('pl-rpm')?.value)   || 1440;
+
+    const res = document.getElementById('pl-resultado');
+    if (!hp || !V) { res.style.display = 'none'; return; }
+
+    const kW     = hp * 0.7457;
+    const I_line = (kW * 1000) / (Math.sqrt(3) * V * eta * cosfi);
+    const I_fase = conn === 'D' ? I_line / Math.sqrt(3) : I_line;
+    const V_fase = conn === 'Y' ? V / Math.sqrt(3) : V;
+
+    // Densidad recomendada por rango de potencia
+    let delta_est = hp <= 10 ? 7.0 : hp <= 50 ? 5.5 : 4.5;
+
+    // Polos estimados
+    // P = 120·f / rpm_sync, aproximamos rpm_sync desde rpm nominal con deslizamiento ~3%
+    const P_est = Math.round(120 * f / rpm);
+    const P_def = Math.max(2, Math.min(12, P_est % 2 === 0 ? P_est : P_est + 1));
+
+    const s = id => document.getElementById(id);
+    s('pl-r-polos').textContent  = `${P_def} polos`;
+    s('pl-r-kw').textContent     = `${kW.toFixed(2)} kW`;
+    s('pl-r-iline').textContent  = `${I_line.toFixed(2)} A`;
+    s('pl-r-ifase').textContent  = `${I_fase.toFixed(2)} A`;
+    s('pl-r-vfase').textContent  = `${V_fase.toFixed(1)} V`;
+    s('pl-r-delta').textContent  = `${delta_est.toFixed(1)} A/mm²`;
+
+    // Guardar para aplicar
+    window._placa_calc = { I_fase, delta_est, V_fase, kW, P_def };
+
+    res.style.display = 'block';
+    const ap = document.getElementById('pl-aplicado');
+    if (ap) ap.style.display = 'none';
+}
+
+function aplicarDesdePlaca() {
+    const c = window._placa_calc;
+    if (!c) return;
+
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    set('corriente', c.I_fase.toFixed(2));
+    set('densidad',  c.delta_est.toFixed(1));
+
+    const ap = document.getElementById('pl-aplicado');
+    if (ap) ap.style.display = 'inline';
+
+    // Scroll suave a sección 3
+    document.getElementById('card-placa')?.scrollIntoView({ behavior: 'smooth' });
+}
+
+// Inicializar
+actualizarOpciones();
+actualizarPasos();
+calcularDesdePlaca();
+</script>
+</body>
+</html>
