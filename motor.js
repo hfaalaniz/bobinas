@@ -250,20 +250,15 @@
         // Aproximación: Bav ≈ 0.637 × Bt (Bt en el diente, típico 1.4–1.6 T)
         // Fórmula práctica: Bav ≈ (π × ID) / (2 × P × L) × 0.7  (ajuste empírico)
         // Método más preciso: resolver B del entrehierro para un Bt nominal de 1.5 T
-        const Bt_nom = 1.50; // T en el diente
-        const slotType = _sv('motorSlotType') || 'rect';
+        const Bt_nom = 1.50; // T en el diente — objetivo de diseño típico
         const dims = _readSlotDims();
-        // Usar paso de ranura (no paso polar) evaluado a la altura media de la ranura
-        const hw0 = dims.hw || 18;
-        const D_mid_mm = ID + hw0;                           // diámetro al centro del cuerpo de ranura
-        const tau_slot_mid_mm = Math.PI * D_mid_mm / Q;     // paso de ranura a mitad
-        const tau_slot_bore_mm = Math.PI * ID / Q;           // paso de ranura al bore
-        const bw_eff = dims.bw || dims.btop || 5.5;
-        const b_tooth_mm = Math.max(0.5, tau_slot_mid_mm - bw_eff);
-        // A_tooth correcta: sección perpendicular al flujo radial = b_tooth × L_stack
-        const A_tooth = b_tooth_mm * L * 0.97;               // mm² (b_tooth[mm] × L[mm] × kFe)
-        // Bav = Bt × A_tooth / (tau_slot_bore × L)  — L se cancela → Bav = Bt × b_tooth × 0.97 / tau_slot_bore
-        const Bav_calc = Bt_nom * A_tooth / (tau_slot_bore_mm * L);
+        // Ancho del diente al bore (cuello, zona de máxima saturación):
+        //   b_tooth_bore = τ_slot_bore − b1
+        // Bav = Bt × b_tooth_bore × 0.97 / τ_slot_bore  (L se cancela)
+        const tau_slot_bore_mm = Math.PI * ID / Q;
+        const b1 = dims.b1 || 3;
+        const b_tooth_mm = Math.max(0.5, tau_slot_bore_mm - b1);
+        const Bav_calc = Bt_nom * b_tooth_mm * 0.97 / tau_slot_bore_mm;
         const Bav = Math.min(0.90, Math.max(0.40, parseFloat(Bav_calc.toFixed(3))));
         _v('motorBav', Bav);
         const badge = document.getElementById('bav_calc_badge');
@@ -388,19 +383,40 @@
     }
 
     // ── Área real de ranura ───────────────────────────────────────────────────
+    // Área geométrica total: boca (cuello estrecho) + cuerpo (zona conductora)
     function _slotArea(type, d) {
-        if (type === 'rect') return (d.b1 * d.h1) + (d.bw * d.hw);
+        if (type === 'rect') {
+            // boca: b1 × h1 (cuello estrecho que no aloja conductores)
+            // cuerpo: bw × hw (zona donde van los conductores)
+            return (d.b1 * d.h1) + (d.bw * d.hw);
+        }
         if (type === 'trap') {
             const boca = d.b1 * d.h1;
             const cuerpo = ((d.btop + d.bbot) / 2) * d.hw;
             return boca + cuerpo;
         }
-        // semi: rectángulo + semicírculo en el fondo
+        // semi: boca + rectángulo + semicírculo en el fondo
         const r = d.r || 3.5;
         const boca = d.b1 * d.h1;
         const rect = d.bw * (d.hw - r);
         const semi = Math.PI * r * r / 2;
         return boca + rect + semi;
+    }
+
+    // Área neta disponible para conductores (solo el cuerpo, sin boca ni aislante)
+    function _slotBodyArea(type, d, t_ins) {
+        const t = t_ins || 0.30;
+        let bw, hw;
+        if (type === 'rect') {
+            bw = d.bw; hw = d.hw;
+        } else if (type === 'trap') {
+            bw = (d.btop + d.bbot) / 2; hw = d.hw;
+        } else {
+            bw = d.bw || d.hw; hw = d.hw;
+        }
+        const A_body = bw * hw;
+        const A_iso  = 2 * t * (bw + hw);
+        return Math.max(1, A_body - A_iso);
     }
 
     // ── Longitud media de vuelta (MTL) real ───────────────────────────────────
@@ -568,31 +584,29 @@
         const d  = p.slotDims;
         const { P } = _computePoles(p.freq, p.rpm);
 
-        // Ancho del diente evaluado a la altura media de la ranura
-        const h_mid_mm = (d.hw || 18) / 2;
-        const D_mid_mm = ID + 2 * h_mid_mm;
-        const tau_slot_mid_mm = Math.PI * D_mid_mm / Q;
-        const bw_at_mid = d.bw || d.btop || 5.5;
-        const b_tooth = Math.max(0.5, tau_slot_mid_mm - bw_at_mid);  // mm
-
-        const h_tooth_mm = (d.hw || 18) + (d.h1 || 1);  // altura (camino magnético), no entra en A
-
-        // Sección transversal del diente perpendicular al flujo radial:
-        //   A_tooth = b_tooth [mm] × L_stack [mm] × kFe
-        // El flujo pasa radialmente a través de esa sección.
-        // h_tooth es la longitud del camino magnético en el diente, no el área.
-        const A_tooth = b_tooth * L * 1e-6 * 0.97;  // m²
-
-        // Flujo por diente = Bav × τ_slot_bore × L  (flujo del entrehierro bajo una ranura)
-        // Bt = Phi_tooth / A_tooth = Bav × τ_slot_bore / (b_tooth × 0.97)  — L se cancela
+        // Flujo del entrehierro entra al diente por la sección en el bore.
+        // El ancho del diente al bore es el que limita la saturación:
+        //   τ_slot_bore = π × ID / Q  (paso de ranura al bore)
+        //   b_tooth_bore = τ_slot_bore − b1  (ancho de diente en la boca)
+        // Para el camino magnético se usa el ancho mínimo (cuello en el bore).
         const tau_slot_bore_mm = Math.PI * ID / Q;
+        const b_tooth_bore = Math.max(0.5, tau_slot_bore_mm - (d.b1 || 3));  // mm
+
+        // Sección del diente al bore (zona de máxima saturación):
+        //   A_tooth = b_tooth_bore × L_stack × kFe
+        const A_tooth = b_tooth_bore * L * 1e-6 * 0.97;  // m²
+
+        // Flujo por ranura = Bav × τ_slot_bore × L
         const Phi_tooth = p.Bav * (tau_slot_bore_mm / 1000) * (L / 1000);  // Wb
         const B_tooth = A_tooth > 0 ? Phi_tooth / A_tooth : 0;
 
-        // Densidad de flujo en la corona
+        // b_tooth reportado al bore (cuello, el más crítico)
+        const b_tooth = b_tooth_bore;
+        const h_tooth_mm = (d.hw || 18) + (d.h1 || 1);
+
+        // Densidad de flujo en la corona (flujo circula tangencialmente)
         const h_slot_total = (d.hw || 18) + (d.h1 || 1);
         const h_yoke = (OD - ID) / 2 - h_slot_total;  // mm
-        // Sección de la corona = h_yoke × L_stack (flujo circula tangencialmente)
         const A_yoke = Math.max(1e-6, h_yoke * L * 1e-6 * 0.97);  // m²
         const B_yoke = Phi / (2 * A_yoke);
 
@@ -696,15 +710,10 @@
         const m_Cu_total = m * m_Cu_phase;
 
         // Factor de llenado real
-        const A_slot = _slotArea(p.slotType, d);  // mm²
-        const bw_slot = d.bw || d.btop || 5.5;
-        const hw_slot = d.hw || 18;
-        const t_ins = 0.30;  // espesor aislante Nomex por lado (mm)
-        const A_slot_body = bw_slot * hw_slot;
-        const A_iso = 2 * t_ins * (bw_slot + hw_slot);
-        const A_slot_net = Math.max(1, A_slot_body - A_iso);
-        // Conductores en ranura: 2 capas × N_c vueltas × n_parallel hilos por vuelta × factor esmalte
-        const A_cond = 2 * N_c * wire.n_parallel * (wire.area / wire.n_parallel) * 1.05;
+        const A_slot = _slotArea(p.slotType, d);  // mm² (total geométrico)
+        const A_slot_net = _slotBodyArea(p.slotType, d);  // mm² (cuerpo neto sin aislante)
+        // Conductores en ranura: 2 capas × N_c vueltas × área real × factor esmalte 1.05
+        const A_cond = 2 * N_c * wire.area * 1.05;
         const Ku = A_cond / A_slot_net;
 
         // Volúmenes y masas del núcleo
@@ -847,11 +856,7 @@
 
         // Factor de llenado
         const A_slot     = _slotArea(p.slotType, d);
-        const bw_slot_s  = d.bw || d.btop || 5.5;
-        const hw_slot_s  = d.hw || 18;
-        const A_slot_body_s = bw_slot_s * hw_slot_s;
-        const A_iso_s    = 2 * 0.30 * (bw_slot_s + hw_slot_s);
-        const A_slot_net = Math.max(1, A_slot_body_s - A_iso_s);
+        const A_slot_net = _slotBodyArea(p.slotType, d);
         const Ku_m = (2 * N_c_m * wire_m.area * 1.05) / A_slot_net;
         const Ku_a = (2 * N_c_a * wire_a.area * 1.05) / A_slot_net;
 
@@ -955,7 +960,9 @@
             return;
         }
 
-        const BavRange  = [0.40, 0.44, 0.48, 0.52, 0.56, 0.60, 0.64, 0.68, 0.72, 0.76, 0.80];
+        // Rango de Bav ordenado del más alto al más bajo.
+        // Motores estándar operan entre 0.60 y 0.80 T; valores bajos generan exceso de vueltas y Ku alto.
+        const BavRange  = [0.80, 0.76, 0.72, 0.68, 0.64, 0.60, 0.56, 0.52, 0.48, 0.44, 0.40];
         const pitchOpts = [
             { type: "full",  ratio: 1.000 },
             { type: "short", ratio: 0.889 },
@@ -1065,32 +1072,26 @@
 
         const candidates = [];
 
-        // Calcular Bt actual para saber cuánto hay que reducir bw
-        // B_tooth ∝ Bav × τ_slot_bore / ((τ_slot_mid − bw) × h_tooth)
-        // Para B_tooth_target = bsat × 0.82, despejamos bw_max:
-        // bw_max = τ_slot_mid − Bav × τ_slot_bore × L / (Btarget × h_tooth × L)
-        //        = τ_slot_mid − τ_slot_bore / (Btarget/Bav × h_tooth/h_tooth)
-        // simplificado: bw_max = τ_slot_mid − τ_slot_bore × (Bav / Btarget)
+        // El diente se mide al bore (b1 = cuello, zona de máxima saturación).
+        // b_tooth_bore = τ_slot_bore − b1
+        // Bt = Bav × τ_slot_bore / (b_tooth_bore × 0.97)
+        // Para reducir Bt: b1_max tal que b_tooth_bore = τ_slot_bore × Bav / (Bt_target × 0.97)
         const { P } = _computePoles(p0.freq, p0.rpm);
         const Q  = p0.Q;
         const ID = p0.D_bore_mm;
         const tau_slot_bore = Math.PI * ID / Q;
-        const h_mid = (d0.hw || 18) / 2;
-        const tau_slot_mid  = Math.PI * (ID + 2 * h_mid) / Q;
         const Bav0  = p0.Bav;
         const bsat  = p0.steel.bsat;
         const h_tooth = (d0.hw || 18) + (d0.h1 || 1);
 
-        // bw para que Bt = 82% de bsat con el Bav actual
-        // Bt = Bav × τ_slot_bore / ((τ_slot_mid − bw) × h_tooth / h_tooth)
-        //    → b_tooth_needed = τ_slot_bore / (Bt_target / Bav)  ... simplif.
-        // Más preciso: b_tooth_needed × h_tooth × 0.97 = Phi_tooth / Bt_target
-        // Phi_tooth = Bav × τ_slot_bore_m × L_m
-        // b_tooth_needed = Phi_tooth / (Bt_target × h_tooth_m × 0.97)
-        const Phi_tooth   = Bav0 * (tau_slot_bore / 1000) * (p0.L_stack_mm / 1000);
+        // b_tooth mínimo para que Bt ≤ 82% bsat
         const Bt_target   = bsat * 0.82;
-        const b_tooth_min = Phi_tooth / (Bt_target * (h_tooth / 1000) * 0.97) * 1000; // mm
-        const bw_max      = Math.max(1.0, tau_slot_mid - b_tooth_min);
+        // Bt = Bav × τ_bore / (b_tooth × 0.97)  → b_tooth_min = Bav × τ_bore / (Bt_target × 0.97)
+        const b_tooth_min = Bav0 * tau_slot_bore / (Bt_target * 0.97);
+        // b1_max = τ_bore − b_tooth_min  (máximo ancho de boca que aún permite el diente)
+        const b1_max      = Math.max(0.5, tau_slot_bore - b_tooth_min);
+        // Para candidatos geométricos usamos bw_max como el máximo b1 practicable
+        const bw_max      = b1_max;
 
         // hw mínimo para corona: Bc = Phi/(2 × h_yoke × L × 0.97) ≤ bsat × 0.80
         // h_yoke = (OD−ID)/2 − h_tooth; h_tooth = hw + h1
@@ -1103,7 +1104,7 @@
 
         // hw mínimo para Ku: A_cond = 2 × N_c × area × 1.05; A_slot_net = bw × hw_new − perim × 0.3
         // Ku_target = 0.48; → A_slot_net_needed = A_cond / Ku_target
-        // → hw_needed = (A_slot_net_needed + perim_iso) / bw
+        // hw_for_ku: profundidad mínima para que A_slot_net admita los conductores actuales a Ku=0.48
         // Pero N_c depende del nuevo Bav (que optimizará el sweep), así que estimamos con N_c actual
         const { r: r0 } = _evalFitness(p0);
         const bw_curr = d0.bw || d0.btop || 5.5;
@@ -1112,16 +1113,19 @@
         const A_net_needed = A_cond_curr / 0.48;
         const hw_for_ku   = Math.ceil((A_net_needed + A_iso_fix) / bw_curr);
 
-        // ── Candidatos por reducción de bw (mejora Bt) ────────────────────────
-        if (needBt && bw_max > 1.0) {
-            // bw_max > 0 significa que hay margen para reducir bw y mejorar Bt
-            const bw_min_abs = Math.max(1.0, Math.ceil(bw_max * 2) / 2);
-            const bw_start   = Math.floor((d0.bw || 5.5) * 2) / 2;
-            for (let bw = bw_start; bw >= bw_min_abs; bw = parseFloat((bw - 0.5).toFixed(1))) {
-                const delta = (d0.bw || 5.5) - bw;
+        // ── Candidatos por reducción de b1 (boca) → mejora Bt ────────────────
+        // El Bt se controla ampliando el diente al bore: b_tooth = τ_bore − b1
+        // Aumentar b1 estrecha el diente; reducir b1 lo amplía.
+        // bw_max aquí es b1_max (reutilizado para compat. con el label)
+        if (needBt && (d0.b1 || 3) > bw_max) {
+            const b1_curr  = d0.b1 || 3;
+            const b1_start = parseFloat((b1_curr).toFixed(1));
+            const b1_min   = Math.max(0.5, parseFloat(bw_max.toFixed(1)));
+            for (let b1 = b1_start; b1 >= b1_min; b1 = parseFloat((b1 - 0.5).toFixed(1))) {
+                const delta = b1_curr - b1;
                 candidates.push({
-                    dims:  _buildDims(d0, p0.slotType, { bw }),
-                    label: `Reducir bw: ${(d0.bw||5.5).toFixed(1)} → ${bw.toFixed(1)} mm (−${delta.toFixed(1)} mm, fresado de ranura)`,
+                    dims:  _buildDims(d0, p0.slotType, { b1 }),
+                    label: `Reducir b1 (boca): ${b1_curr.toFixed(1)} → ${b1.toFixed(1)} mm (−${delta.toFixed(1)} mm, amplía diente al bore)`,
                     priority: delta,
                 });
             }
@@ -1140,17 +1144,18 @@
             }
         }
 
-        // ── Candidatos combinados bw↓ + hw↑ (mejora Bt + Ku simultáneamente) ──
+        // ── Candidatos combinados b1↓ + hw↑ (mejora Bt + Ku simultáneamente) ──
         if (needBt && needKu) {
-            const bw_try = parseFloat(Math.max(1.5, bw_max).toFixed(1));
+            const b1_curr = d0.b1 || 3;
+            const b1_try  = parseFloat(Math.max(0.5, bw_max).toFixed(1));
             for (let hw = Math.ceil(hw_for_ku); hw <= Math.min((d0.hw||18) + 10, h_slot_max); hw++) {
-                const dBw = (d0.bw||5.5) - bw_try;
+                const dB1 = b1_curr - b1_try;
                 const dHw = hw - (d0.hw||18);
-                if (dBw <= 0 && dHw <= 0) continue;
+                if (dB1 <= 0 && dHw <= 0) continue;
                 candidates.push({
-                    dims:  _buildDims(d0, p0.slotType, { bw: bw_try, hw }),
-                    label: `bw ${(d0.bw||5.5).toFixed(1)}→${bw_try} mm + hw ${d0.hw||18}→${hw} mm (fresado + profundidad)`,
-                    priority: dBw + dHw * 0.5,
+                    dims:  _buildDims(d0, p0.slotType, { b1: b1_try, hw }),
+                    label: `b1 ${b1_curr.toFixed(1)}→${b1_try} mm + hw ${d0.hw||18}→${hw} mm (amplía diente + profundidad)`,
+                    priority: dB1 + dHw * 0.5,
                 });
             }
         }
@@ -1192,9 +1197,8 @@
 
         // ── Geometría actual ─────────────────────────────────────────
         const tau_slot_bore  = Math.PI * ID / Q;
-        const tau_slot_mid   = Math.PI * (ID + hw0) / Q;
-        const b_tooth_curr   = Math.max(0.5, tau_slot_mid - bw0);
-        // A_tooth: sección perpendicular al flujo radial = b_tooth × L_stack
+        // Diente se mide al bore (b1 es el cuello, zona de máxima saturación)
+        const b_tooth_curr   = Math.max(0.5, tau_slot_bore - (d0.b1 || 3));
         const A_tooth_curr   = b_tooth_curr * L * 1e-6 * 0.97;   // m²
         const Phi_tooth      = Bav * (tau_slot_bore / 1000) * (L / 1000);
         const Bt_curr        = Phi_tooth / A_tooth_curr;
@@ -1215,14 +1219,15 @@
         // 2) Bav máximo para el diente con la geometría actual
         const Bav_for_Bt = Bt_target * A_tooth_curr / (tau_slot_bore / 1000 * (L / 1000));
 
-        // 3) Q máximo que satisface Bt (multiple de P*m)
+        // 3) Q máximo que satisface Bt (múltiplo de P×m)
+        // b_tooth al bore = τ_bore − b1 (se mantiene b1 fijo)
+        const b1_curr = d0.b1 || 3;
         let Q_ok = null;
         for (let q = Q - 1; q >= 6; q--) {
             if (q % (P * m) !== 0) continue;
             const tau_b = Math.PI * ID / q;
-            const tau_m_q = Math.PI * (ID + hw0) / q;
-            const b_t   = Math.max(0.5, tau_m_q - bw0);
-            const A_t   = b_t * L * 1e-6 * 0.97;   // A = b_tooth × L
+            const b_t   = Math.max(0.5, tau_b - b1_curr);
+            const A_t   = b_t * L * 1e-6 * 0.97;
             const phi_t = Bav * (tau_b / 1000) * (L / 1000);
             if (phi_t / A_t <= Bt_target) { Q_ok = q; break; }
         }
@@ -1231,9 +1236,8 @@
         let ID_ok = null;
         for (let id = ID + 5; id <= OD - 20; id += 5) {
             const tau_b = Math.PI * id / Q;
-            const tau_m_id = Math.PI * (id + hw0) / Q;
-            const b_t   = Math.max(0.5, tau_m_id - bw0);
-            const A_t   = b_t * L * 1e-6 * 0.97;   // A = b_tooth × L
+            const b_t   = Math.max(0.5, tau_b - b1_curr);
+            const A_t   = b_t * L * 1e-6 * 0.97;
             const phi_t = Bav * (tau_b / 1000) * (L / 1000);
             if (phi_t / A_t <= Bt_target) { ID_ok = id; break; }
         }
@@ -1241,13 +1245,11 @@
         // 5) hw máximo que deja corona suficiente
         const h_yoke_min_m = Phi_polo / (2 * By_target * (L / 1000) * 0.97);
         const h_yoke_min   = h_yoke_min_m * 1000;
-        const hw_max_for_corona = (OD - ID) / 2 - h_yoke_min - h1;
+        const hw_max_for_corona = (OD - ID) / 2 - h_yoke_min - (d0.h1 || 1);
 
         // 6) Estimación de potencia máxima para Ku=0.50
         const { r: r_est } = _evalFitness(p0);
-        const A_slot_body  = bw0 * hw0;
-        const A_iso        = 2 * 0.30 * (bw0 + hw0);
-        const A_slot_net   = Math.max(1, A_slot_body - A_iso);
+        const A_slot_net   = _slotBodyArea(p0.slotType, d0);
         const A_cond_max   = A_slot_net * 0.50;
         const area_wire_max = A_cond_max / (2 * r_est.N_c * 1.05);
         const I_max_admisible = area_wire_max * 6.0;
@@ -1850,6 +1852,11 @@
         html += _buildSlotTable(r);
         html += _buildWindingSteps(r);
 
+        // Secciones adicionales
+        html += _buildThreePhaseConnDiagram(r);
+        html += _buildCapacitorTable(r);
+        html += _buildSinglePhaseWiring(r);
+
         // Advertencias post-cálculo
         if (r.postWarnings.length > 0) {
             html += r.postWarnings.map(w =>
@@ -1962,6 +1969,155 @@
             <ol class="winding-steps">
                 ${steps.map(s => `<li>${s}</li>`).join('')}
             </ol>
+        </div>`;
+    }
+
+    // ── Tabla de capacitores para motores monofásicos ────────────────────────
+    function _buildCapacitorTable(r) {
+        if (r.motorType !== 'single') return '';
+        const a = r.aux;
+        if (!a || a.C_uF === null) return '';
+
+        // Tabla de referencia: [hp, C_marcha_min, C_marcha_max, C_arranque_min, C_arranque_max]
+        const capRef = [
+            [0.25,  8, 10,  40,  60],
+            [0.33, 12, 16,  60,  80],
+            [0.50, 16, 20,  80, 110],
+            [0.75, 20, 25, 110, 140],
+            [1.0,  30, 35, 140, 180],
+            [1.5,  40, 45, 200, 250],
+            [2.0,  50, 60, 270, 320],
+            [3.0,  70, 80, 400, 450],
+            [5.0,  90,100, 550, 600],
+        ];
+
+        const hp = r.powerKW / 0.7457;
+        const row = capRef.reduce((best, cur) =>
+            Math.abs(cur[0] - hp) < Math.abs(best[0] - hp) ? cur : best, capRef[0]);
+
+        const isCapRun = r.startMethod === 'cap_run';
+
+        return `<div style="margin-top:20px;">
+            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;
+                color:#0891b2;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid rgba(8,145,178,0.25);">
+                Capacitores (220 V / ${r.f} Hz)
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+                <div style="background:rgba(34,211,238,0.06);border:1px solid rgba(34,211,238,0.25);border-radius:8px;padding:12px;">
+                    <div style="font-size:10px;font-weight:700;color:#22d3ee;text-transform:uppercase;margin-bottom:6px;">Capacitor de marcha (blanco)</div>
+                    <div style="font-size:18px;font-weight:700;color:#f1f5f9;">${row[1]}–${row[2]} µF</div>
+                    <div style="font-size:10px;color:#64748b;margin-top:4px;">400/450 VAC · Polipropileno · Permanente</div>
+                    <div style="font-size:10px;color:#94a3b8;margin-top:6px;">Cálculo: ~${Math.round(r.powerKW / 0.7457 * 35)} µF estimado</div>
+                </div>
+                <div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.25);border-radius:8px;padding:12px;${isCapRun ? 'opacity:0.45;' : ''}">
+                    <div style="font-size:10px;font-weight:700;color:#f59e0b;text-transform:uppercase;margin-bottom:6px;">Capacitor de arranque (negro)</div>
+                    <div style="font-size:18px;font-weight:700;color:#f1f5f9;">${row[3]}–${row[4]} µF</div>
+                    <div style="font-size:10px;color:#64748b;margin-top:4px;">110/220 VAC · Electrolítico · Solo arranque</div>
+                    ${isCapRun ? '<div style="font-size:10px;color:#f87171;margin-top:6px;">No aplica — motor de capacitor permanente</div>' : '<div style="font-size:10px;color:#94a3b8;margin-top:6px;">Se desconecta al 75% RPM vía centrífugo</div>'}
+                </div>
+            </div>
+            <div style="font-size:11px;color:#64748b;line-height:1.6;background:rgba(0,0,0,0.15);border-radius:6px;padding:8px 10px;">
+                ⚠️ Valores de referencia para ${row[0]} HP / 220 V. Ajustar midiendo corriente en vacío — el valor correcto minimiza la corriente de línea.<br>
+                Si el motor zumba sin arrancar: revisar centrífugo o aumentar capacitor de arranque.<br>
+                Si calienta rápido en vacío: reducir capacitor de marcha 5 µF y re-medir.
+            </div>
+        </div>`;
+    }
+
+    // ── Diagrama de conexión llave inversora monofásica ───────────────────────
+    function _buildSinglePhaseWiring(r) {
+        if (r.motorType !== 'single') return '';
+        const isCapRun = r.startMethod === 'cap_run';
+
+        return `<div style="margin-top:20px;">
+            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;
+                color:#0891b2;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid rgba(8,145,178,0.25);">
+                Diagrama de conexión — Inversión de giro
+            </div>
+            <div style="font-size:11px;color:#94a3b8;margin-bottom:10px;">
+                Para invertir el giro se cruzan las puntas del devanado auxiliar (U1-U2 = trabajo, V1-V2 = arranque con capacitores).
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+                <div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:10px;">
+                    <div style="font-size:11px;font-weight:700;color:#10b981;margin-bottom:6px;">🟢 Giro Horario (Derecha)</div>
+                    <div style="font-family:monospace;font-size:11px;color:#cbd5e1;line-height:1.8;">
+                        Fase (L) → U1 + V1<br>
+                        Neutro (N) → U2 + V2
+                    </div>
+                    <div style="font-size:10px;color:#64748b;margin-top:6px;">Chapitas: U1-V1 | U2-V2</div>
+                </div>
+                <div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.3);border-radius:8px;padding:10px;">
+                    <div style="font-size:11px;font-weight:700;color:#3b82f6;margin-bottom:6px;">🔵 Giro Antihorario (Izquierda)</div>
+                    <div style="font-family:monospace;font-size:11px;color:#cbd5e1;line-height:1.8;">
+                        Fase (L) → U1 + V2<br>
+                        Neutro (N) → U2 + V1
+                    </div>
+                    <div style="font-size:10px;color:#64748b;margin-top:6px;">Chapitas: U1-V2 | U2-V1</div>
+                </div>
+            </div>
+            <div style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.2);border-radius:8px;padding:10px;margin-bottom:10px;">
+                <div style="font-size:11px;font-weight:700;color:#a78bfa;margin-bottom:6px;">🎛️ Llave inversora de 3 posiciones (1-0-2)</div>
+                <div style="font-family:monospace;font-size:10px;color:#cbd5e1;line-height:1.9;">
+                    Borne 1 ← Fase (L) de red<br>
+                    Borne 2 ← Neutro (N) de red<br>
+                    Borne 3 ← V1 del motor<br>
+                    Borne 4 ← V2 del motor<br>
+                    Puente: borne 3 ↔ borne 6<br>
+                    Puente: borne 4 ↔ borne 5<br>
+                    U1 puenteado con borne 1 · U2 puenteado con borne 2
+                </div>
+            </div>
+            ${!isCapRun ? `<div style="font-size:10px;color:#f87171;background:rgba(239,68,68,0.05);border:1px solid rgba(239,68,68,0.2);border-radius:6px;padding:8px;">
+                ⚠️ Nunca pasar de posición 1 a 2 directamente. Llevar a 0 y esperar el "clic" del centrífugo antes de invertir.
+            </div>` : ''}
+        </div>`;
+    }
+
+    // ── Diagrama de conexión trifásica (por fase) ─────────────────────────────
+    function _buildThreePhaseConnDiagram(r) {
+        if (r.motorType !== 'three') return '';
+        const gpf = r.groups_per_phase;
+        const conn = r.connection === 'star' ? 'Estrella (Y)' : 'Triángulo (Δ)';
+        const ps = r.phase_starts;
+        if (!ps) return '';
+
+        // Genera la lista de grupos por fase
+        const phaseNames = ['U (L1)', 'V (L2)', 'W (L3)'];
+        const starts = [ps.U, ps.V, ps.W];
+        const slotStep = Math.round(r.Q / (r.P * 3));  // ranuras por grupo
+
+        return `<div style="margin-top:20px;">
+            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;
+                color:#0891b2;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid rgba(8,145,178,0.25);">
+                Diagrama de grupos y conexión — ${r.P} polos / ${conn}
+            </div>
+            <div style="font-size:11px;color:#94a3b8;margin-bottom:8px;">
+                ${gpf} grupos por fase · Conexión: ${r.groups_connection === 'paralelo' ? 'Paralelo (F-F / I-I)' : 'Serie (F-I / F-I — alternado)'}
+            </div>
+            ${phaseNames.map((ph, pi) => {
+                const col = ['#ef4444','#3b82f6','#10b981'][pi];
+                const groupSlots = Array.from({length: gpf}, (_, gi) =>
+                    ((starts[pi] - 1 + gi * slotStep * 2) % r.Q) + 1
+                );
+                const connSteps = r.groups_connection === 'paralelo'
+                    ? `<li>Terminal entrada (${ph.split(' ')[0]}1): Inicio del Grupo 1</li>
+                       <li>Unir <strong>todos los Inicios</strong> juntos → terminal de línea ${ph.split(' ')[0]}1</li>
+                       <li>Unir <strong>todos los Finales</strong> juntos → terminal de neutro ${ph.split(' ')[0]}2</li>`
+                    : Array.from({length: gpf}, (_, i) => {
+                        if (i === 0) return `<li>Terminal entrada (${ph.split(' ')[0]}1): Inicio Grupo 1</li>`;
+                        if (i % 2 === 1) return `<li>Unir Fin Grupo ${i} con Fin Grupo ${i+1}</li>`;
+                        return `<li>Unir Inicio Grupo ${i} con Inicio Grupo ${i+1}</li>`;
+                      }).filter(Boolean).join('') + `<li>Terminal salida (${ph.split(' ')[0]}2): Inicio Grupo ${gpf}</li>`;
+                return `<div style="background:rgba(0,0,0,0.15);border-left:3px solid ${col};border-radius:0 8px 8px 0;padding:10px 12px;margin-bottom:8px;">
+                    <div style="font-size:11px;font-weight:700;color:${col};margin-bottom:6px;">Fase ${ph}</div>
+                    <div style="font-size:10px;color:#64748b;margin-bottom:4px;">Ranuras de inicio: ${groupSlots.join(', ')}</div>
+                    <ol style="font-size:10px;color:#94a3b8;margin:0;padding-left:16px;line-height:1.8;">${connSteps}</ol>
+                </div>`;
+            }).join('')}
+            <div style="font-size:11px;color:#64748b;background:rgba(0,0,0,0.15);border-radius:6px;padding:8px 10px;margin-top:4px;">
+                <strong style="color:#22d3ee;">Centro de estrella (Y):</strong> Unir firmemente U2 + V2 + W2 en cortocircuito.<br>
+                <strong style="color:#22d3ee;">Triángulo (Δ):</strong> U1-W2 · V1-U2 · W1-V2.
+            </div>
         </div>`;
     }
 
