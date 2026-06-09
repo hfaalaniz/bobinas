@@ -4,35 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Filtros LC / EMI — Suite Magnética</title>
+    <link rel="stylesheet" href="bobinas.css">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="styles_validation.css">
     <link rel="stylesheet" href="styles_additional.css">
     <link rel="stylesheet" href="styles_modules.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <style>
-        .page-header {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            padding: 16px 24px;
-            background: rgba(0,0,0,0.3);
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        .back-btn {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            color: #94a3b8;
-            text-decoration: none;
-            font-size: 14px;
-            padding: 8px 14px;
-            border-radius: 8px;
-            border: 1px solid rgba(255,255,255,0.12);
-            transition: all .2s;
-        }
-        .back-btn:hover { color: #f1f5f9; background: rgba(255,255,255,0.08); }
-        .page-title { font-size: 1.1rem; font-weight: 700; color: #f1f5f9; }
-        .page-subtitle { font-size: 0.8rem; color: #64748b; }
+        body { background: var(--bg); padding: 0; }
         .topology-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -42,18 +21,18 @@
         .topology-btn {
             padding: 10px 6px;
             border-radius: 8px;
-            border: 1px solid rgba(255,255,255,0.12);
-            background: rgba(255,255,255,0.05);
-            color: #94a3b8;
+            border: 1px solid var(--border);
+            background: var(--surface2);
+            color: var(--muted);
             cursor: pointer;
             font-size: 13px;
             text-align: center;
             transition: all .2s;
         }
         .topology-btn.active, .topology-btn:hover {
-            background: rgba(17,153,142,0.2);
-            border-color: #11998e;
-            color: #34d399;
+            background: var(--plight);
+            border-color: var(--primary);
+            color: var(--primary);
         }
     </style>
 </head>

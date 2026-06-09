@@ -4,524 +4,414 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Suite de Diseño Magnético</title>
+    <link rel="stylesheet" href="bobinas.css">
     <style>
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body { padding: 0; }
 
-        body {
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
-            min-height: 100vh;
-            color: #fff;
-        }
-
-        /* ── HEADER ── */
-        header {
+        /* ── Header ── */
+        .idx-header {
+            background: var(--plight);
+            border-bottom: 2px solid var(--border);
             text-align: center;
-            padding: 60px 20px 40px;
+            padding: 40px 20px 32px;
         }
-        header .badge {
+        .idx-badge {
             display: inline-block;
-            background: rgba(255,255,255,0.12);
-            border: 1px solid rgba(255,255,255,0.25);
+            background: var(--plight);
+            border: 1px solid #bfdbfe;
             border-radius: 20px;
-            padding: 6px 18px;
-            font-size: 12px;
+            padding: 5px 16px;
+            font-size: 11px;
             letter-spacing: 2px;
             text-transform: uppercase;
-            margin-bottom: 20px;
-            color: #a5b4fc;
-        }
-        header h1 {
-            font-size: clamp(2rem, 5vw, 3.2rem);
-            font-weight: 800;
-            line-height: 1.15;
+            color: var(--primary);
             margin-bottom: 16px;
-            background: linear-gradient(90deg, #a78bfa, #60a5fa, #34d399);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            font-weight: 700;
         }
-        header p {
-            font-size: 1.05rem;
-            color: #94a3b8;
-            max-width: 560px;
+        .idx-header h1 {
+            font-size: clamp(1.6rem, 4vw, 2.4rem);
+            font-weight: 800;
+            color: var(--primary);
+            margin-bottom: 12px;
+            -webkit-text-fill-color: unset;
+            text-align: center;
+        }
+        .idx-header p {
+            font-size: .95rem;
+            color: var(--muted);
+            max-width: 520px;
             margin: 0 auto;
             line-height: 1.7;
         }
 
-        /* ── STATS BAR ── */
-        .stats {
+        /* ── Stats bar ── */
+        .idx-stats {
             display: flex;
             justify-content: center;
-            gap: 40px;
+            gap: 36px;
             flex-wrap: wrap;
-            padding: 20px 20px 50px;
+            padding: 24px 20px 28px;
+            background: var(--card);
+            border-bottom: 1px solid var(--border);
         }
-        .stat { text-align: center; }
-        .stat-value {
-            font-size: 1.8rem;
-            font-weight: 700;
-            color: #a78bfa;
-        }
-        .stat-label { font-size: 0.8rem; color: #64748b; text-transform: uppercase; letter-spacing: 1px; }
+        .idx-stat { text-align: center; }
+        .idx-stat-val { font-size: 1.6rem; font-weight: 800; color: var(--primary); }
+        .idx-stat-lbl { font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
 
-        /* ── GRID DE CARDS ── */
-        .grid {
+        /* ── Grid ── */
+        .idx-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 24px;
-            max-width: 1200px;
+            grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+            gap: 18px;
+            max-width: 1100px;
             margin: 0 auto;
-            padding: 0 24px 80px;
+            padding: 28px 24px 60px;
         }
 
-        /* ── CARD ── */
-        .card {
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.10);
-            border-radius: 20px;
-            padding: 30px 28px;
+        /* ── Card ── */
+        .idx-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 24px 22px;
             cursor: pointer;
             text-decoration: none;
             color: inherit;
             display: flex;
             flex-direction: column;
-            gap: 16px;
-            transition: transform .25s, box-shadow .25s, border-color .25s, background .25s;
-            position: relative;
-            overflow: hidden;
+            gap: 14px;
+            transition: transform .2s, box-shadow .2s, border-color .2s;
         }
-        .card::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: var(--card-glow, transparent);
-            opacity: 0;
-            transition: opacity .3s;
-            border-radius: inherit;
+        .idx-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--primary);
+            box-shadow: 0 8px 32px rgba(29,78,216,.12);
         }
-        .card:hover { transform: translateY(-6px); border-color: rgba(255,255,255,0.22); }
-        .card:hover::before { opacity: 1; }
-        .card:hover { box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
 
-        /* Colores por tarjeta */
-        .card-inductor  { --card-glow: radial-gradient(ellipse at 0% 0%, rgba(102,126,234,0.15), transparent 60%); }
-        .card-rewind    { --card-glow: radial-gradient(ellipse at 0% 0%, rgba(255,107,53,0.15), transparent 60%); }
-        .card-smps      { --card-glow: radial-gradient(ellipse at 0% 0%, rgba(240,93,251,0.15), transparent 60%); }
-        .card-lcfilter  { --card-glow: radial-gradient(ellipse at 0% 0%, rgba(17,153,142,0.15), transparent 60%); }
-        .card-compare   { --card-glow: radial-gradient(ellipse at 0% 0%, rgba(245,158,11,0.15), transparent 60%); }
-        .card-export    { --card-glow: radial-gradient(ellipse at 0% 0%, rgba(100,116,139,0.15), transparent 60%); }
-        .card-motor     { --card-glow: radial-gradient(ellipse at 0% 0%, rgba(34,211,238,0.15), transparent 60%); }
-        .card-rebomotor { --card-glow: radial-gradient(ellipse at 0% 0%, rgba(52,211,153,0.15), transparent 60%); }
-        .card-scraper   { --card-glow: radial-gradient(ellipse at 0% 0%, rgba(251,191,36,0.15), transparent 60%); }
-
-        .card-icon {
-            width: 54px;
-            height: 54px;
-            border-radius: 14px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 26px;
+        .idx-card-icon {
+            width: 50px; height: 50px;
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px;
             flex-shrink: 0;
         }
-        .icon-inductor { background: linear-gradient(135deg, #667eea, #764ba2); }
-        .icon-rewind   { background: linear-gradient(135deg, #ff6b35, #f7971e); }
-        .icon-smps     { background: linear-gradient(135deg, #f093fb, #f5576c); }
-        .icon-lcfilter { background: linear-gradient(135deg, #11998e, #38ef7d); }
-        .icon-compare  { background: linear-gradient(135deg, #f7971e, #ffd200); }
-        .icon-export   { background: linear-gradient(135deg, #4b6cb7, #182848); }
-        .icon-motor    { background: linear-gradient(135deg, #22d3ee, #0891b2); }
-        .icon-rebomotor{ background: linear-gradient(135deg, #34d399, #059669); }
-        .icon-scraper  { background: linear-gradient(135deg, #fbbf24, #d97706); }
+        .icon-inductor  { background: linear-gradient(135deg, #667eea, #764ba2); }
+        .icon-rewind    { background: linear-gradient(135deg, #ff6b35, #f7971e); }
+        .icon-smps      { background: linear-gradient(135deg, #f093fb, #f5576c); }
+        .icon-lcfilter  { background: linear-gradient(135deg, #11998e, #38ef7d); }
+        .icon-compare   { background: linear-gradient(135deg, #f7971e, #ffd200); }
+        .icon-export    { background: linear-gradient(135deg, #4b6cb7, #182848); }
+        .icon-motor     { background: linear-gradient(135deg, #22d3ee, #0891b2); }
+        .icon-rebomotor { background: linear-gradient(135deg, #34d399, #059669); }
+        .icon-scraper   { background: linear-gradient(135deg, #fbbf24, #d97706); }
+        .icon-mono      { background: linear-gradient(135deg, #ec4899, #be185d); }
+        .icon-geo       { background: linear-gradient(135deg, #6366f1, #4338ca); }
 
-        .card-header { display: flex; align-items: center; gap: 16px; }
+        .idx-card-header { display: flex; align-items: center; gap: 14px; }
+        .idx-card-title    { font-size: 1rem; font-weight: 700; color: var(--text); }
+        .idx-card-subtitle { font-size: .74rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+        .idx-card-desc     { font-size: .86rem; color: var(--muted); line-height: 1.65; flex: 1; }
 
-        .card-title {
-            font-size: 1.15rem;
-            font-weight: 700;
-            color: #f1f5f9;
-        }
-        .card-subtitle {
-            font-size: 0.78rem;
-            color: #64748b;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .card-desc {
-            font-size: 0.9rem;
-            color: #94a3b8;
-            line-height: 1.7;
-            flex: 1;
-        }
-
-        /* Tags de capacidades */
-        .card-tags {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-        .tag {
-            background: rgba(255,255,255,0.08);
-            border: 1px solid rgba(255,255,255,0.12);
+        .idx-card-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+        .idx-tag {
+            background: var(--surface2);
+            border: 1px solid var(--border);
             border-radius: 20px;
-            padding: 3px 10px;
+            padding: 3px 9px;
             font-size: 11px;
-            color: #94a3b8;
+            color: var(--muted);
             white-space: nowrap;
         }
 
-        .card-footer {
+        .idx-card-footer {
             display: flex;
             align-items: center;
             justify-content: space-between;
             margin-top: 4px;
         }
-        .card-link {
-            font-size: 0.85rem;
-            font-weight: 600;
-            color: var(--link-color, #a78bfa);
+        .idx-card-link {
+            font-size: .84rem;
+            font-weight: 700;
+            color: var(--primary);
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 5px;
         }
-        .card-link svg { transition: transform .2s; }
-        .card:hover .card-link svg { transform: translateX(4px); }
+        .idx-card-link svg { transition: transform .2s; }
+        .idx-card:hover .idx-card-link svg { transform: translateX(4px); }
 
-        .card-badge {
+        .idx-badge-pill {
             font-size: 10px;
             font-weight: 700;
             padding: 3px 8px;
             border-radius: 20px;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: .5px;
         }
-        .badge-new { background: #10b981; color: #fff; }
-        .badge-pro { background: #f5576c; color: #fff; }
-        .badge-free { background: rgba(255,255,255,0.12); color: #94a3b8; }
+        .pill-new  { background: #dcfce7; color: #15803d; }
+        .pill-pro  { background: #fee2e2; color: #991b1b; }
+        .pill-free { background: var(--surface2); color: var(--muted); }
 
-        /* ── FOOTER ── */
-        footer {
+        /* ── Footer ── */
+        .idx-footer {
             text-align: center;
-            padding: 30px 20px;
-            color: #334155;
-            font-size: 0.8rem;
-            border-top: 1px solid rgba(255,255,255,0.05);
+            padding: 24px 20px;
+            color: var(--muted);
+            font-size: .8rem;
+            border-top: 1px solid var(--border);
         }
 
-        /* ── RESPONSIVE ── */
+        /* ── Responsive ── */
         @media (max-width: 640px) {
-            .grid { grid-template-columns: 1fr; padding: 0 16px 60px; }
-            header { padding: 40px 16px 24px; }
-            .stats { gap: 24px; }
+            .idx-grid   { grid-template-columns: 1fr; padding: 16px 14px 50px; }
+            .idx-header { padding: 28px 16px 22px; }
+            .idx-stats  { gap: 20px; }
         }
     </style>
 </head>
 <body>
 
-<header>
-    <div class="badge">⚡ Suite de Diseño Magnético</div>
+<div class="idx-header">
+    <div class="idx-badge">⚡ Suite de Diseño Magnético</div>
     <h1>Calculadoras de<br>Componentes Magnéticos</h1>
     <p>Herramientas profesionales para el diseño de inductores, transformadores, fuentes conmutadas y filtros electromagnéticos.</p>
-</header>
+</div>
 
-<div class="stats">
-    <div class="stat">
-        <div class="stat-value">16+</div>
-        <div class="stat-label">Materiales de núcleo</div>
+<div class="idx-stats">
+    <div class="idx-stat">
+        <div class="idx-stat-val">16+</div>
+        <div class="idx-stat-lbl">Materiales de núcleo</div>
     </div>
-    <div class="stat">
-        <div class="stat-value">8</div>
-        <div class="stat-label">Módulos de cálculo</div>
+    <div class="idx-stat">
+        <div class="idx-stat-val">12</div>
+        <div class="idx-stat-lbl">Módulos de cálculo</div>
     </div>
-    <div class="stat">
-        <div class="stat-value">AWG 10–40</div>
-        <div class="stat-label">Tabla de calibres</div>
+    <div class="idx-stat">
+        <div class="idx-stat-val">AWG 8–40</div>
+        <div class="idx-stat-lbl">Tabla de calibres</div>
     </div>
-    <div class="stat">
-        <div class="stat-value">100%</div>
-        <div class="stat-label">Offline / Sin registro</div>
+    <div class="idx-stat">
+        <div class="idx-stat-val">100%</div>
+        <div class="idx-stat-lbl">Offline / Sin registro</div>
     </div>
 </div>
 
-<div class="grid">
+<div class="idx-grid">
 
     <!-- INDUCTOR -->
-    <a href="inductor.html" class="card card-inductor">
-        <div class="card-header">
-            <div class="card-icon icon-inductor">🔌</div>
+    <a href="inductor.html" class="idx-card">
+        <div class="idx-card-header">
+            <div class="idx-card-icon icon-inductor">🔌</div>
             <div>
-                <div class="card-title">Diseño de Inductores</div>
-                <div class="card-subtitle">Núcleo toroidal · Aire · Ferrita</div>
+                <div class="idx-card-title">Diseño de Inductores</div>
+                <div class="idx-card-subtitle">Núcleo toroidal · Aire · Ferrita</div>
             </div>
         </div>
-        <p class="card-desc">
-            Calcula vueltas, resistencia DC, pérdidas en cobre y núcleo, nivel de saturación y factor de llenado para cualquier tipo de núcleo magnético. Incluye curva B-H interactiva y visualización del devanado.
-        </p>
-        <div class="card-tags">
-            <span class="tag">16 materiales</span>
-            <span class="tag">Curva B-H</span>
-            <span class="tag">Saturación</span>
-            <span class="tag">AWG automático</span>
-            <span class="tag">Validación</span>
+        <p class="idx-card-desc">Calcula vueltas, resistencia DC, pérdidas en cobre y núcleo, nivel de saturación y factor de llenado para cualquier tipo de núcleo magnético. Incluye curva B-H interactiva y visualización del devanado.</p>
+        <div class="idx-card-tags">
+            <span class="idx-tag">16 materiales</span><span class="idx-tag">Curva B-H</span><span class="idx-tag">Saturación</span><span class="idx-tag">AWG automático</span>
         </div>
-        <div class="card-footer">
-            <span class="card-link" style="--link-color:#818cf8">
-                Abrir calculadora
-                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
-                </svg>
-            </span>
-            <span class="card-badge badge-free">Gratis</span>
+        <div class="idx-card-footer">
+            <span class="idx-card-link">Abrir calculadora <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></span>
+            <span class="idx-badge-pill pill-free">Gratis</span>
         </div>
     </a>
 
-    <!-- REBOBINADO -->
-    <a href="rebobinado.html" class="card card-rewind">
-        <div class="card-header">
-            <div class="card-icon icon-rewind">🔧</div>
+    <!-- REBOBINADO TRANSFORMADORES -->
+    <a href="rebobinado.html" class="idx-card">
+        <div class="idx-card-header">
+            <div class="idx-card-icon icon-rewind">🔧</div>
             <div>
-                <div class="card-title">Rebobinado de Transformadores</div>
-                <div class="card-subtitle">Red 50/60 Hz · Hasta 5 secundarios</div>
+                <div class="idx-card-title">Rebobinado de Transformadores</div>
+                <div class="idx-card-subtitle">Red 50/60 Hz · Hasta 5 secundarios</div>
             </div>
         </div>
-        <p class="card-desc">
-            Diseña o rebobina transformadores de red a partir de las dimensiones físicas del núcleo. Calcula V/vuelta, vueltas por devanado, calibres AWG, factor de llenado y elevación de temperatura, con instrucciones de bobinado paso a paso.
-        </p>
-        <div class="card-tags">
-            <span class="tag">Diseño nuevo</span>
-            <span class="tag">Rebobinar existente</span>
-            <span class="tag">5 secundarios</span>
-            <span class="tag">Instrucciones paso a paso</span>
+        <p class="idx-card-desc">Diseña o rebobina transformadores de red a partir de las dimensiones físicas del núcleo. Calcula V/vuelta, vueltas por devanado, calibres AWG, factor de llenado y elevación de temperatura, con instrucciones paso a paso.</p>
+        <div class="idx-card-tags">
+            <span class="idx-tag">Diseño nuevo</span><span class="idx-tag">Rebobinar existente</span><span class="idx-tag">5 secundarios</span>
         </div>
-        <div class="card-footer">
-            <span class="card-link" style="--link-color:#fb923c">
-                Abrir calculadora
-                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
-                </svg>
-            </span>
-            <span class="card-badge badge-new">Nuevo</span>
+        <div class="idx-card-footer">
+            <span class="idx-card-link">Abrir calculadora <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></span>
+            <span class="idx-badge-pill pill-new">Nuevo</span>
         </div>
     </a>
 
     <!-- SMPS -->
-    <a href="smps.html" class="card card-smps">
-        <div class="card-header">
-            <div class="card-icon icon-smps">⚡</div>
+    <a href="smps.html" class="idx-card">
+        <div class="idx-card-header">
+            <div class="idx-card-icon icon-smps">⚡</div>
             <div>
-                <div class="card-title">Fuentes Conmutadas SMPS</div>
-                <div class="card-subtitle">Flyback · Forward · Alta frecuencia</div>
+                <div class="idx-card-title">Fuentes Conmutadas SMPS</div>
+                <div class="idx-card-subtitle">Flyback · Forward · Alta frecuencia</div>
             </div>
         </div>
-        <p class="card-desc">
-            Diseña el transformador de una fuente conmutada en topología Flyback o Forward. Calcula vueltas, entrehierro, skin effect, pérdidas AC en cobre, pérdidas en núcleo y eficiencia real. Alerta cuando se necesita Litz wire.
-        </p>
-        <div class="card-tags">
-            <span class="tag">Flyback</span>
-            <span class="tag">Forward</span>
-            <span class="tag">4 salidas</span>
-            <span class="tag">Skin effect</span>
-            <span class="tag">Entrehierro</span>
-            <span class="tag">Litz wire</span>
+        <p class="idx-card-desc">Diseña el transformador de una fuente conmutada en topología Flyback o Forward. Calcula vueltas, entrehierro, skin effect, pérdidas AC en cobre, pérdidas en núcleo y eficiencia real.</p>
+        <div class="idx-card-tags">
+            <span class="idx-tag">Flyback</span><span class="idx-tag">Forward</span><span class="idx-tag">4 salidas</span><span class="idx-tag">Skin effect</span><span class="idx-tag">Litz wire</span>
         </div>
-        <div class="card-footer">
-            <span class="card-link" style="--link-color:#f472b6">
-                Abrir calculadora
-                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
-                </svg>
-            </span>
-            <span class="card-badge badge-pro">Pro</span>
+        <div class="idx-card-footer">
+            <span class="idx-card-link">Abrir calculadora <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></span>
+            <span class="idx-badge-pill pill-pro">Pro</span>
         </div>
     </a>
 
     <!-- FILTROS LC -->
-    <a href="filtros.html" class="card card-lcfilter">
-        <div class="card-header">
-            <div class="card-icon icon-lcfilter">📐</div>
+    <a href="filtros.html" class="idx-card">
+        <div class="idx-card-header">
+            <div class="idx-card-icon icon-lcfilter">📐</div>
             <div>
-                <div class="card-title">Filtros LC / EMI</div>
-                <div class="card-subtitle">Butterworth · L / T / Pi · Órdenes 1–3</div>
+                <div class="idx-card-title">Filtros LC / EMI</div>
+                <div class="idx-card-subtitle">Butterworth · L / T / Pi · Órdenes 1–3</div>
             </div>
         </div>
-        <p class="card-desc">
-            Calcula los componentes L y C para filtros paso bajo, paso alto, paso banda y notch con topología L, T o Pi según criterio Butterworth. Muestra el esquemático del filtro y la curva de respuesta en frecuencia.
-        </p>
-        <div class="card-tags">
-            <span class="tag">Paso bajo / alto</span>
-            <span class="tag">Paso banda / Notch</span>
-            <span class="tag">L · T · Pi</span>
-            <span class="tag">Curva atenuación</span>
-            <span class="tag">Esquemático</span>
+        <p class="idx-card-desc">Calcula los componentes L y C para filtros paso bajo, paso alto, paso banda y notch con topología L, T o Pi. Muestra el esquemático del filtro y la curva de respuesta en frecuencia.</p>
+        <div class="idx-card-tags">
+            <span class="idx-tag">Paso bajo / alto</span><span class="idx-tag">Paso banda / Notch</span><span class="idx-tag">Curva atenuación</span>
         </div>
-        <div class="card-footer">
-            <span class="card-link" style="--link-color:#34d399">
-                Abrir calculadora
-                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
-                </svg>
-            </span>
-            <span class="card-badge badge-new">Nuevo</span>
+        <div class="idx-card-footer">
+            <span class="idx-card-link">Abrir calculadora <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></span>
+            <span class="idx-badge-pill pill-new">Nuevo</span>
         </div>
     </a>
 
     <!-- COMPARADOR -->
-    <a href="comparador.html" class="card card-compare">
-        <div class="card-header">
-            <div class="card-icon icon-compare">📊</div>
+    <a href="comparador.html" class="idx-card">
+        <div class="idx-card-header">
+            <div class="idx-card-icon icon-compare">📊</div>
             <div>
-                <div class="card-title">Comparador de Núcleos</div>
-                <div class="card-subtitle">Todos los materiales · Gráfico comparativo</div>
+                <div class="idx-card-title">Comparador de Núcleos</div>
+                <div class="idx-card-subtitle">Todos los materiales · Gráfico comparativo</div>
             </div>
         </div>
-        <p class="card-desc">
-            Compara simultáneamente todos los materiales de núcleo disponibles para los mismos requisitos de inductancia y corriente. Ordena por pérdidas totales e identifica la mejor opción con un gráfico de barras interactivo.
-        </p>
-        <div class="card-tags">
-            <span class="tag">16 materiales</span>
-            <span class="tag">Pérdidas</span>
-            <span class="tag">Peso</span>
-            <span class="tag">Costo relativo</span>
-            <span class="tag">Gráfico Chart.js</span>
+        <p class="idx-card-desc">Compara simultáneamente todos los materiales de núcleo disponibles para los mismos requisitos de inductancia y corriente. Ordena por pérdidas totales con un gráfico de barras interactivo.</p>
+        <div class="idx-card-tags">
+            <span class="idx-tag">16 materiales</span><span class="idx-tag">Pérdidas</span><span class="idx-tag">Peso</span><span class="idx-tag">Gráfico Chart.js</span>
         </div>
-        <div class="card-footer">
-            <span class="card-link" style="--link-color:#fbbf24">
-                Abrir comparador
-                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
-                </svg>
-            </span>
-            <span class="card-badge badge-free">Gratis</span>
+        <div class="idx-card-footer">
+            <span class="idx-card-link">Abrir comparador <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></span>
+            <span class="idx-badge-pill pill-free">Gratis</span>
         </div>
     </a>
 
-    <!-- MOTOR -->
-    <a href="motor.html" class="card card-motor">
-        <div class="card-header">
-            <div class="card-icon icon-motor">⚙️</div>
+    <!-- GEOMETRIA ESTATOR trifasico avanzado -->
+    <a href="geometricaestatores.html" class="idx-card">
+        <div class="idx-card-header">
+            <div class="idx-card-icon icon-geo">📐</div>
             <div>
-                <div class="card-title">Rebobinado de Motores</div>
-                <div class="card-subtitle">Monofásico · Trifásico · Hasta 50 HP</div>
+                <div class="idx-card-title">Geometría del Estátor — Avanzado</div>
+                <div class="idx-card-subtitle">Trifásico · Ku · Alternativas · Datos de placa</div>
             </div>
         </div>
-        <p class="card-desc">
-            Calcula el devanado completo para rebobinar motores de inducción monofásicos y trifásicos. Determina vueltas por bobina, calibres AWG, paso de bobina, factor de bobinado Kw y distribución de ranuras con visualización del estátor.
-        </p>
-        <div class="card-tags">
-            <span class="tag">Trifásico Y/Δ</span>
-            <span class="tag">Monofásico cap.</span>
-            <span class="tag">Factor Kw</span>
-            <span class="tag">Distribución ranuras</span>
-            <span class="tag">Diagrama estátor</span>
+        <p class="idx-card-desc">Calcula espiras, calibre AWG y factor de llenado Ku desde la geometría real del estátor. Propone correcciones automáticas cuando Ku supera el límite y permite ingresar datos de placa para motores sin registros de bobinado.</p>
+        <div class="idx-card-tags">
+            <span class="idx-tag">Factor Ku real</span><span class="idx-tag">Auto-corrección</span><span class="idx-tag">Datos de placa</span><span class="idx-tag">AWG IEC 60317</span>
         </div>
-        <div class="card-footer">
-            <span class="card-link" style="--link-color:#22d3ee">
-                Abrir calculadora
-                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
-                </svg>
-            </span>
-            <span class="card-badge badge-new">Nuevo</span>
+        <div class="idx-card-footer">
+            <span class="idx-card-link">Abrir calculadora <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></span>
+            <span class="idx-badge-pill pill-new">Nuevo</span>
         </div>
     </a>
 
-    <!-- REBOBINADO DE MOTORES (asistente) -->
-    <a href="rebomotor.html" class="card card-rebomotor">
-        <div class="card-header">
-            <div class="card-icon icon-rebomotor">⚡</div>
+    <!-- MOTOR rebobinado guia rapida -->
+    <a href="motor.html" class="idx-card">
+        <div class="idx-card-header">
+            <div class="idx-card-icon icon-motor">⚙️</div>
             <div>
-                <div class="card-title">Calculadora de Rebobinado</div>
-                <div class="card-subtitle">Asistente paso a paso · 3~ y 1~ · PDF tesis</div>
+                <div class="idx-card-title">Rebobinado Motores — Guía</div>
+                <div class="idx-card-subtitle">Trifásico · Mono · Diagrama ranuras</div>
             </div>
         </div>
-        <p class="card-desc">
-            Asistente guiado para calcular el rebobinado completo de un motor de inducción. Ingresa los datos de placa, geometría del estátor y ranura; obtén calibre AWG, vueltas por bobina, factor de llenado Ku, longitud de hilo, masa de cobre y protocolo de rebobinado paso a paso.
-        </p>
-        <div class="card-tags">
-            <span class="tag">Asistente 5 pasos</span>
-            <span class="tag">Factor Kw / Kd / Kp</span>
-            <span class="tag">AWG automático</span>
-            <span class="tag">Factor llenado Ku</span>
-            <span class="tag">Protocolo rebobinado</span>
+        <p class="idx-card-desc">Calculadora de devanados para motores trifásicos y monofásicos. Determina vueltas por bobina, calibres AWG, factor de bobinado Kw y distribución de ranuras con visualización del estátor.</p>
+        <div class="idx-card-tags">
+            <span class="idx-tag">Trifásico Y/Δ</span><span class="idx-tag">Monofásico cap.</span><span class="idx-tag">Factor Kw</span><span class="idx-tag">Diagrama estátor</span>
         </div>
-        <div class="card-footer">
-            <span class="card-link" style="--link-color:#34d399">
-                Abrir asistente
-                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
-                </svg>
-            </span>
-            <span class="card-badge badge-new">Nuevo</span>
+        <div class="idx-card-footer">
+            <span class="idx-card-link">Abrir calculadora <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></span>
+            <span class="idx-badge-pill pill-new">Nuevo</span>
         </div>
     </a>
 
-    <!-- SCRAPER REVISTAS -->
-    <a href="scraper.html" class="card card-scraper">
-        <div class="card-header">
-            <div class="card-icon icon-scraper">📥</div>
+    <!-- REBOBINADO MOTORES asistente -->
+    <a href="rebomotor.html" class="idx-card">
+        <div class="idx-card-header">
+            <div class="idx-card-icon icon-rebomotor">⚡</div>
             <div>
-                <div class="card-title">Descargador de Revistas</div>
-                <div class="card-subtitle">Editores SRL · 119 PDFs · 2018–2025</div>
+                <div class="idx-card-title">Asistente de Rebobinado</div>
+                <div class="idx-card-subtitle">Paso a paso · 3~ · Desde geometría</div>
             </div>
         </div>
-        <p class="card-desc">
-            Descarga masiva de todas las publicaciones de editores-srl.com.ar directamente desde el navegador. Filtra por categoría (Ingeniería Eléctrica, Luminotecnia, AADECA, Anuario), selecciona individualmente y descarga con control de pausa y detención.
-        </p>
-        <div class="card-tags">
-            <span class="tag">119 PDFs</span>
-            <span class="tag">Filtro por categoría</span>
-            <span class="tag">Descarga masiva</span>
-            <span class="tag">Pausa / Detener</span>
-            <span class="tag">Sin instalar nada</span>
+        <p class="idx-card-desc">Asistente guiado de 4 pasos para calcular el rebobinado completo de un motor trifásico. Ingresa datos de placa y geometría del estátor; obtén calibre AWG, vueltas por bobina, Ku y protocolo de rebobinado.</p>
+        <div class="idx-card-tags">
+            <span class="idx-tag">Asistente 4 pasos</span><span class="idx-tag">Factor Kw · Ku</span><span class="idx-tag">AWG automático</span><span class="idx-tag">Protocolo</span>
         </div>
-        <div class="card-footer">
-            <span class="card-link" style="--link-color:#fbbf24">
-                Abrir descargador
-                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
-                </svg>
-            </span>
-            <span class="card-badge badge-new">Nuevo</span>
+        <div class="idx-card-footer">
+            <span class="idx-card-link">Abrir asistente <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></span>
+            <span class="idx-badge-pill pill-new">Nuevo</span>
+        </div>
+    </a>
+
+    <!-- MOTOR MONOFASICO -->
+    <a href="motoresmono.html" class="idx-card">
+        <div class="idx-card-header">
+            <div class="idx-card-icon icon-mono">🔁</div>
+            <div>
+                <div class="idx-card-title">Bobinados Monofásicos</div>
+                <div class="idx-card-subtitle">Monofásico · Capacitor · Factor llenado</div>
+            </div>
+        </div>
+        <p class="idx-card-desc">Calcula el devanado de trabajo y arranque para motores monofásicos. Determina calibres AWG, vueltas, capacitor de marcha y arranque, y analiza el factor de llenado con soluciones para hilos en paralelo.</p>
+        <div class="idx-card-tags">
+            <span class="idx-tag">Bobinado trabajo</span><span class="idx-tag">Bobinado arranque</span><span class="idx-tag">Capacitores</span><span class="idx-tag">Factor llenado</span>
+        </div>
+        <div class="idx-card-footer">
+            <span class="idx-card-link">Abrir calculadora <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></span>
+            <span class="idx-badge-pill pill-free">Gratis</span>
+        </div>
+    </a>
+
+    <!-- BIBLIOTECA DE REVISTAS -->
+    <a href="revistas.html" class="idx-card">
+        <div class="idx-card-header">
+            <div class="idx-card-icon icon-scraper">📚</div>
+            <div>
+                <div class="idx-card-title">Biblioteca de Revistas</div>
+                <div class="idx-card-subtitle">Editores SRL · 119 revistas · 2018–2026</div>
+            </div>
+        </div>
+        <p class="idx-card-desc">Biblioteca completa de publicaciones de Editores SRL. Navega por categoría, busca por nombre, lee las revistas directamente en el navegador con vista previa de portada, o descarga el PDF.</p>
+        <div class="idx-card-tags">
+            <span class="idx-tag">Vista previa</span><span class="idx-tag">Leer online</span><span class="idx-tag">Ing. Eléctrica</span><span class="idx-tag">Luminotecnia</span><span class="idx-tag">AADECA</span>
+        </div>
+        <div class="idx-card-footer">
+            <span class="idx-card-link">Abrir biblioteca <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></span>
+            <span class="idx-badge-pill pill-new">Nuevo</span>
         </div>
     </a>
 
     <!-- EXPORTAR -->
-    <a href="exportar.html" class="card card-export">
-        <div class="card-header">
-            <div class="card-icon icon-export">💾</div>
+    <a href="exportar.html" class="idx-card">
+        <div class="idx-card-header">
+            <div class="idx-card-icon icon-export">💾</div>
             <div>
-                <div class="card-title">Gestión de Diseños</div>
-                <div class="card-subtitle">JSON · CSV · PDF · Importar</div>
+                <div class="idx-card-title">Gestión de Diseños</div>
+                <div class="idx-card-subtitle">JSON · CSV · PDF · Importar</div>
             </div>
         </div>
-        <p class="card-desc">
-            Administra todos los diseños guardados desde cualquier módulo. Exporta a JSON para respaldo, a CSV para hojas de cálculo o genera un reporte HTML listo para imprimir como PDF. Importa diseños previos con validación de formato.
-        </p>
-        <div class="card-tags">
-            <span class="tag">Exportar JSON</span>
-            <span class="tag">Exportar CSV</span>
-            <span class="tag">Reporte PDF</span>
-            <span class="tag">Importar</span>
-            <span class="tag">LocalStorage</span>
+        <p class="idx-card-desc">Administra todos los diseños guardados desde cualquier módulo. Exporta a JSON, CSV o genera un reporte HTML para imprimir como PDF. Importa diseños previos con validación de formato.</p>
+        <div class="idx-card-tags">
+            <span class="idx-tag">Exportar JSON</span><span class="idx-tag">Exportar CSV</span><span class="idx-tag">Reporte PDF</span><span class="idx-tag">Importar</span>
         </div>
-        <div class="card-footer">
-            <span class="card-link" style="--link-color:#94a3b8">
-                Gestionar diseños
-                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
-                </svg>
-            </span>
-            <span class="card-badge badge-free">Gratis</span>
+        <div class="idx-card-footer">
+            <span class="idx-card-link">Gestionar diseños <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></span>
+            <span class="idx-badge-pill pill-free">Gratis</span>
         </div>
     </a>
 
 </div>
 
-<footer>
+<div class="idx-footer">
     Suite de Diseño Magnético — Calculadoras offline para ingeniería de componentes magnéticos
-</footer>
+</div>
 
 </body>
 </html>

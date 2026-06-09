@@ -4,46 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fuentes Conmutadas SMPS — Suite Magnética</title>
+    <link rel="stylesheet" href="bobinas.css">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="styles_validation.css">
     <link rel="stylesheet" href="styles_additional.css">
     <link rel="stylesheet" href="styles_modules.css">
     <style>
-        .page-header {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            padding: 16px 24px;
-            background: rgba(0,0,0,0.3);
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        .back-btn {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            color: #94a3b8;
-            text-decoration: none;
-            font-size: 14px;
-            padding: 8px 14px;
-            border-radius: 8px;
-            border: 1px solid rgba(255,255,255,0.12);
-            transition: all .2s;
-        }
-        .back-btn:hover { color: #f1f5f9; background: rgba(255,255,255,0.08); }
-        .page-title { font-size: 1.1rem; font-weight: 700; color: #f1f5f9; }
-        .page-subtitle { font-size: 0.8rem; color: #64748b; }
-        .output-row { margin-bottom: 12px; padding: 12px; background: rgba(255,255,255,0.04); border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); }
-        .output-row-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: 600; color: #94a3b8; font-size: 13px; }
+        body { background: var(--bg); padding: 0; }
+        .output-row { margin-bottom: 12px; padding: 12px; background: var(--surface2); border-radius: 8px; border: 1px solid var(--border); }
+        .output-row-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: 600; color: var(--muted); font-size: 13px; }
         .out-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-        .btn-remove-out { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #f87171; border-radius: 6px; padding: 3px 10px; cursor: pointer; font-size: 12px; }
+        .btn-remove-out { background: #fff1f2; border: 1px solid #fca5a5; color: var(--red, #ef4444); border-radius: 6px; padding: 3px 10px; cursor: pointer; font-size: 12px; }
         .btn-remove-out:hover { background: rgba(239,68,68,0.25); }
-        .btn-add-out { width: 100%; background: rgba(240,93,251,0.1); border: 1px dashed rgba(240,93,251,0.4); color: #e879f9; border-radius: 8px; padding: 10px; cursor: pointer; font-size: 13px; margin-top: 8px; }
-        .btn-add-out:hover { background: rgba(240,93,251,0.2); }
+        .btn-add-out { width: 100%; background: var(--plight); border: 1px dashed var(--border); color: var(--primary); border-radius: 8px; padding: 10px; cursor: pointer; font-size: 13px; margin-top: 8px; }
+        .btn-add-out:hover { background: var(--plight); border-color: var(--primary); }
         .btn-add-out:disabled { opacity: 0.4; cursor: default; }
         .topo-card { display: flex; gap: 10px; }
-        .topo-opt { flex: 1; padding: 12px 8px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.05); color: #94a3b8; cursor: pointer; text-align: center; font-size: 13px; transition: all .2s; }
+        .topo-opt { flex: 1; padding: 12px 8px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface2); color: var(--muted); cursor: pointer; text-align: center; font-size: 13px; transition: all .2s; }
         .topo-opt .topo-icon { font-size: 22px; display: block; margin-bottom: 4px; }
-        .topo-opt.active, .topo-opt:hover { background: rgba(240,93,251,0.15); border-color: #f093fb; color: #f0abfc; }
+        .topo-opt.active, .topo-opt:hover { background: var(--plight); border-color: var(--primary); color: var(--primary); }
     </style>
 </head>
 <body>

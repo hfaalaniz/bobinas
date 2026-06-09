@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Biblioteca de Revistas — Editores SRL</title>
+<link rel="stylesheet" href="bobinas.css">
+<style>
+body { padding: 0; }
+
+/* ── Header ── */
+.rv-header {
+    background: var(--plight);
+    border-bottom: 2px solid var(--border);
+    padding: 14px 24px;
+    display: flex; align-items: center; gap: 16px;
+}
+.rv-title { font-size: 1.25rem; font-weight: 700; color: var(--primary); }
+.rv-sub   { font-size: .8rem; color: var(--muted); margin-top: 2px; }
+
+/* ── Controles ── */
+.rv-controls {
+    max-width: 1200px; margin: 0 auto;
+    padding: 18px 20px 0;
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+}
+.rv-search {
+    flex: 1; min-width: 200px;
+    padding: 9px 13px;
+    border: 1px solid var(--border); border-radius: 8px;
+    font-size: .9rem; background: #fff; color: var(--text);
+}
+.rv-search:focus { outline: none; border-color: var(--primary); }
+.rv-filters { display: flex; gap: 7px; flex-wrap: wrap; }
+.rv-filter-btn {
+    padding: 7px 14px; border-radius: 20px;
+    border: 1px solid var(--border); background: var(--surface2);
+    color: var(--muted); font-size: .82rem; font-weight: 600;
+    cursor: pointer; transition: all .2s;
+    display: flex; align-items: center; gap: 5px;
+}
+.rv-filter-btn:hover { border-color: var(--primary); color: var(--primary); }
+.rv-filter-btn.active { background: var(--plight); border-color: var(--primary); color: var(--primary); }
+.rv-count-badge { font-size: 10px; background: var(--border); border-radius: 8px; padding: 1px 6px; }
+.rv-info { font-size: .82rem; color: var(--muted); margin-left: auto; white-space: nowrap; }
+
+/* ── Grid de cards ── */
+.rv-grid {
+    max-width: 1200px; margin: 0 auto;
+    padding: 18px 20px 60px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 14px;
+}
+
+/* ── Card ── */
+.rv-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    transition: box-shadow .2s, transform .2s;
+    cursor: pointer;
+}
+.rv-card:hover { box-shadow: 0 6px 24px rgba(29,78,216,.13); transform: translateY(-3px); }
+
+/* Portada — iframe con primera página del PDF */
+.rv-thumb {
+    width: 100%; aspect-ratio: 3/4;
+    background: var(--surface2);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; position: relative;
+    border-bottom: 1px solid var(--border);
+    font-size: 3rem; color: var(--border);
+}
+.rv-thumb iframe {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    border: none; pointer-events: none;
+    /* Escala la hoja A4 (842px) al ancho de la card (~200px) */
+    transform: scale(0.24);
+    transform-origin: top left;
+    width: 417%;   /* 100 / 0.24 */
+    height: 417%;
+}
+
+/* Cuerpo */
+.rv-card-body { padding: 10px 12px; flex: 1; display: flex; flex-direction: column; gap: 5px; }
+.rv-card-cat {
+    display: inline-block; padding: 2px 7px; border-radius: 10px;
+    font-size: 10px; font-weight: 700; align-self: flex-start;
+}
+.cat-IE { background: #dbeafe; color: #1d4ed8; }
+.cat-LU { background: #dcfce7; color: #15803d; }
+.cat-AA { background: #ede9fe; color: #6d28d9; }
+.cat-AN { background: #fef9c3; color: #854d0e; }
+
+.rv-card-title { font-size: .8rem; font-weight: 700; color: var(--text); line-height: 1.3; flex: 1; }
+.rv-card-btns  { display: flex; gap: 5px; margin-top: 6px; }
+.rv-btn-read {
+    flex: 1; padding: 6px 0; border-radius: 6px;
+    background: var(--primary); color: #fff;
+    border: none; font-size: .76rem; font-weight: 700;
+    cursor: pointer; text-align: center;
+    transition: background .2s;
+}
+.rv-btn-read:hover { background: #1e40af; }
+.rv-btn-dl {
+    padding: 6px 9px; border-radius: 6px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--muted); font-size: .76rem; font-weight: 700;
+    cursor: pointer; text-decoration: none;
+    transition: all .2s;
+}
+.rv-btn-dl:hover { border-color: var(--primary); color: var(--primary); }
+
+/* ── Modal lector ── */
+.rv-modal-bg {
+    display: none; position: fixed; inset: 0;
+    background: rgba(15,23,42,.75); z-index: 1000;
+    align-items: center; justify-content: center;
+}
+.rv-modal-bg.open { display: flex; }
+.rv-modal {
+    background: var(--card); border-radius: 12px;
+    width: 96vw; height: 96vh;
+    display: flex; flex-direction: column;
+    overflow: hidden; box-shadow: 0 24px 80px rgba(0,0,0,.4);
+}
+.rv-modal-bar {
+    padding: 11px 16px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+}
+.rv-modal-title {
+    font-size: .88rem; font-weight: 700; color: var(--text);
+    flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rv-modal-dl {
+    padding: 6px 14px; background: var(--primary); color: #fff;
+    border: none; border-radius: 6px; font-size: .82rem; font-weight: 700;
+    cursor: pointer; text-decoration: none; transition: background .2s;
+}
+.rv-modal-dl:hover { background: #1e40af; }
+.rv-modal-close {
+    padding: 6px 12px; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: 6px;
+    font-size: .82rem; cursor: pointer; color: var(--text); transition: all .2s;
+}
+.rv-modal-close:hover { border-color: var(--red); color: var(--red); }
+.rv-modal-frame { flex: 1; width: 100%; border: none; }
+
+/* ── Vacío ── */
+.rv-empty { text-align: center; padding: 60px 20px; color: var(--muted); grid-column: 1/-1; }
+.rv-empty-icon { font-size: 3rem; margin-bottom: 12px; }
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+    .rv-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .rv-modal { width: 100vw; height: 100vh; border-radius: 0; }
+}
+</style>
+</head>
+<body>
+
+<div class="rv-header">
+    <a href="index.html" class="back-btn">← Volver</a>
+    <div>
+        <div class="rv-title">📚 Biblioteca de Revistas</div>
+        <div class="rv-sub">Editores SRL — Ingeniería Eléctrica, Luminotecnia y AADECA · archivos locales</div>
+    </div>
+</div>
+
+<div class="rv-controls">
+    <input type="text" class="rv-search" id="rvSearch" placeholder="🔍  Buscar revista..." oninput="filtrar()">
+    <div class="rv-filters">
+        <button class="rv-filter-btn active" data-cat="ALL" onclick="setFiltro('ALL',this)">
+            Todas <span class="rv-count-badge" id="cnt-ALL">0</span>
+        </button>
+        <button class="rv-filter-btn" data-cat="IE" onclick="setFiltro('IE',this)">
+            ⚡ Ing. Eléctrica <span class="rv-count-badge" id="cnt-IE">0</span>
+        </button>
+        <button class="rv-filter-btn" data-cat="LU" onclick="setFiltro('LU',this)">
+            💡 Luminotecnia <span class="rv-count-badge" id="cnt-LU">0</span>
+        </button>
+        <button class="rv-filter-btn" data-cat="AA" onclick="setFiltro('AA',this)">
+            🏭 AADECA <span class="rv-count-badge" id="cnt-AA">0</span>
+        </button>
+    </div>
+    <span class="rv-info" id="rvInfo"></span>
+</div>
+
+<div class="rv-grid" id="rvGrid"></div>
+
+<!-- Modal lector -->
+<div class="rv-modal-bg" id="rvModal" onclick="cerrarModal(event)">
+    <div class="rv-modal">
+        <div class="rv-modal-bar">
+            <span class="rv-modal-title" id="rvModalTitle"></span>
+            <a class="rv-modal-dl" id="rvModalDl" href="#" download>⬇ Descargar</a>
+            <button class="rv-modal-close" onclick="cerrarModal()">✕ Cerrar</button>
+        </div>
+        <iframe class="rv-modal-frame" id="rvModalFrame" src="about:blank"></iframe>
+    </div>
+</div>
+
+<script>
+// ── Catálogo completo desde archivos locales ──────────────────────────────
+// Estructura: { path, cat }
+// path es relativo a revistas.html (e.g. "revistas/Ingenieria_Electrica/archivo.pdf")
+
+const CATALOGO = [
+    // ── Ingeniería Eléctrica ──────────────────────────────────────────────
+    ...[
+        'ie348_revista_completa.pdf',
+        'ingeniera_electrica_330_abril_2018-BAJA.pdf',
+        'ingeniera_electrica_331_mayo_2018-BAJA.pdf',
+        'ingeniera_electrica_332_junio_2018-BAJA.pdf',
+        'ingeniera_electrica_333_julio_2018-BAJA.pdf',
+        'ingeniera_electrica_334_agosto_2018-BAJA.pdf',
+        'ingeniera_electrica_336_octubre_2018-BAJA.pdf',
+        'ingeniera_electrica_337_noviembre_2018-BAJA.pdf',
+        'ingeniera_electrica_338_diciembre_2018-BAJA.pdf',
+        'ingeniera_electrica_340_marzo_2019_baja.pdf',
+        'ingeniera_electrica_341_abril_2019_baja.pdf',
+        'ingenieria_electrica_342_mayo_2016_BAJA.pdf',
+        'ingenieria_electrica_343.pdf',
+        'ingenieria_electrica_344_julio_2018_baja.pdf',
+        'ingenieria_electrica_345_agosto_2019_baja.pdf',
+        'ingenieria_electrica_346_septiembre_2019_baja_0.pdf',
+        'ingenieria_electrica_347_octubre_2019.pdf',
+        'ingenieria_electrica_349_diciembre_2019_baja_0.pdf',
+        'ingenieria_electrica_351_marzo_2020_baja.pdf',
+        'ingenieria_electrica_352_abril_2020_baja_0.pdf',
+        'ingenieria_electrica_353_mayol_2020_web.pdf',
+        'ingenieria_electrica_354_junio_2020_web_0.pdf',
+        'ingenieria_electrica_355_julio_2020_web.pdf',
+        'ingenieria_electrica_356_agosto_2020_web.pdf',
+        'ingenieria_electrica_357_septiembre_2020_web.pdf',
+        'ingenieria_electrica_358_octubre_2020_web.pdf',
+        'ingenieria_electrica_359_noviembre_2020_web_1.pdf',
+        'ingenieria_electrica_360_diciembre_2020_web.pdf',
+        'ingenieria_electrica_362_marzo_2021_web.pdf',
+        'ingenieria_electrica_363_abril_2021_web_0.pdf',
+        'ingenieria_electrica_364_mayo_2021.pdf',
+        'ingenieria_electrica_365_junio2021.pdf',
+        'ingenieria_electrica_366_julio2021.pdf',
+        'ingenieria_electrica_367_agosto2021.pdf',
+        'ingenieria_electrica_368_septiembre_2021.pdf',
+        'ingenieria_electrica_369_octubre_2021.pdf',
+        'ingenieria_electrica_370_noviembre_2021.pdf',
+        'ingenieria_electrica_371_diciembre_2021.pdf',
+        'ingenieria_electrica_373_marzo_2022.pdf',
+        'ingenieria_electrica_374_abril_2022.pdf',
+        'ingenieria_electrica_375_mayo_2022.pdf',
+        'ingenieria_electrica_376_junio_2022.pdf',
+        'ingenieria_electrica_377_julio_2022.pdf',
+        'ingenieria_electrica_378_agosto_2022.pdf',
+        'ingenieria_electrica_379_septiembre_2022.pdf',
+        'ingenieria_electrica_380_octubre_2022.pdf',
+        'ingenieria_electrica_381_noviembre_2022.pdf',
+        'ingenieria_electrica_382_diciembre_2022.pdf',
+        'ingenieria_electrica_383_enero_febrero_2023_edicion_especial.pdf',
+        'ingenieria_electrica_384_marzo_2023.pdf',
+        'ingenieria_electrica_385_abril_2023.pdf',
+        'ingenieria_electrica_386_mayo_2023.pdf',
+        'ingenieria_electrica_387_junio_2023.pdf',
+        'ingenieria_electrica_388_julio_2023.pdf',
+        'ingenieria_electrica_389_agosto_2023_0.pdf',
+        'ingenieria_electrica_390_septiembre_2023.pdf',
+        'ingenieria_electrica_391_octubre_2023.pdf',
+        'ingenieria_electrica_392_noviembre_2023_web.pdf',
+        'ingenieria_electrica_393_diciembre_2023_web.pdf',
+        'ingenieria_electrica_394_enero_2024.pdf',
+        'ingenieria_electrica_395_febrero_2024_100dpi.pdf',
+        'ingenieria_electrica_396_abril_2024_nollmed_100dpi.pdf',
+        'ingenieria_electrica_397_abril_2024_150dpi.pdf',
+        'ingenieria_electrica_398_mayo_2024_imsa.pdf',
+        'ingenieria_electrica_399_junio_2024_kdk.pdf',
+        'ingenieria_electrica_400_julio_2024_institucional_web.pdf',
+        'ingenieria_electrica_401_agosto_2024_cimet_web.pdf',
+        'ingenieria_electrica_402_septiembre_2024_100dpi.pdf',
+        'ingenieria_electrica_403_octubre_2024_locia_100dpi.pdf',
+        'ingenieria_electrica_404_noviembre_2024_montero_100dpi.pdf',
+        'ingenieria_electrica_405_diciembre_2024_tecnet_100dpi.pdf',
+        'ingenieria_electrica_406_enero_2025_editores.pdf',
+        'ingenieria_electrica_407_febrero_2025_finder_100dpi.pdf',
+        'ingenieria_electrica_408_marzo_2025_nollmed_100dpi.pdf',
+        'ingenieria_electrica_409_abril_2025_reflex_100dpi.pdf',
+        'ingenieria_electrica_410_vol5_2025_locia_100dpi.pdf',
+        'ingenieria_electrica_411_vol6_2025_kdk_100dpi.pdf',
+        'ingenieria_electrica_412_vol7_2025_cimet_100dpi.pdf',
+        'ingenieria_electrica_413_vol8_2025_montero.pdf',
+        'ingenieria_electrica_414_vol9_2025_strand.pdf',
+        'ingenieria_electrica_415_vol10_2025_tecnet.pdf',
+        'ingenieria_electrica_416_vol11_2025_lago.pdf',
+        'ingenieria_electrica_417_vol12_2025_dafa.pdf',
+        'ingenieria_electrica_418_vol1_2026_editores.pdf',
+        'ingenieria_electrica_419_vol2_2026_fammie_fami.pdf',
+        'ingenieria_electrica_420_vol3_2026_finder.pdf',
+        'ingenieria_electrica_421_vol4_2026_nollmann.pdf',
+        'ingenieria_electrica_422_vol5_2026_reflex.pdf',
+        'ingenieria_electrica_tendencias_2021.pdf',
+    ].map(f => ({ path: 'revistas/Ingenieria_Electrica/' + f, cat: 'IE' })),
+
+    // ── Luminotecnia (LU142-145 están en Ingenieria_Electrica/) ──────────
+    ...[
+        'LU142_mayo_junio_2018-BAJA.pdf',
+        'LU143_julio_agosto_2018-BAJA.pdf',
+        'LU144_noviembre_diciembre_2018-BAJA.pdf',
+        'LU145_enero_marzo_2019-BAJA.pdf',
+    ].map(f => ({ path: 'revistas/Ingenieria_Electrica/' + f, cat: 'LU' })),
+    ...[
+        'luminotecnia_146_abril_junioo_2019.pdf',
+        'luminotecnia_147_julio_septiembre_2019_baja.pdf',
+        'luminotecnia_148_octubre_diciembre_2019_baja_0.pdf',
+        'luminotecnia_149_abril_junio_2020_web_0.pdf',
+        'luminotecnia_150_octubre_diciembre_2020_web_0.pdf',
+        'luminotecnia_151_abril_junio_2021_0.pdf',
+    ].map(f => ({ path: 'revistas/Luminotecnia/' + f, cat: 'LU' })),
+
+    // ── AADECA ────────────────────────────────────────────────────────────
+    ...[
+        'AADECA 9_julio-sept_2018_BAJA.pdf',
+        'AADECA_11_enero_marzo_2019_baja.pdf',
+        'AADECA_12_abril_junio_2019_baja.pdf',
+        'AADECA_13_julio_septiembre_2019.pdf',
+        'AADECA_14_octubre_diciembre_2019_baja.pdf',
+        'AADECA_17_abril_junio_2021.pdf',
+        'AADECA_19_octubre_diciembre_2021.pdf',
+        'AADECA_Revista_10-Octubre-Diciembre_2018-BAJA.pdf',
+        'AADECA_Revista_8-Abril-Junio_2018-BAJA.pdf',
+        'aadeca23_vol1_2023_enero_abril.pdf',
+        'aadeca24_vol2_2023_mayo_agosto.pdf',
+        'aadeca25_vol3_2023_septiembre_diciembre_150dpi.pdf',
+        'aadeca26_vol1_2024_enero-abril_150dpi.pdf',
+        'aadeca_20_ene_mar_2022.pdf',
+        'aadeca_21_abr_jun_2022.pdf',
+        'aadeca_22_jul_sep_2022.pdf',
+        'aadeca_revista_15_enero-abril_2020.pdf',
+        'aadeca_revista_18_julio_septiembre_2021.pdf',
+    ].map(f => ({ path: 'revistas/AADECA/' + f, cat: 'AA' })),
+];
+
+// ── Título legible ────────────────────────────────────────────────────────
+function titulo(filename) {
+    let s = decodeURIComponent(filename)
+        .replace(/\.pdf$/i, '')
+        .replace(/_100dpi|_150dpi|_web_\d?|_web\d?|_baja_\d?|_baja\d?|-BAJA|_completa/gi, '')
+        .replace(/_0$/, '')
+        .replace(/[-_]+/g, ' ')
+        .trim();
+
+    const mNum  = s.match(/\b(\d{3,})\b/);
+    const mYear = s.match(/\b(20\d{2})\b/);
+    const mMes  = s.match(/enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre/i);
+    const num   = mNum  ? `#${mNum[1]}`   : '';
+    const year  = mYear ? ` · ${mYear[1]}` : '';
+    const mes   = mMes  ? ` ${mMes[0]}`   : '';
+
+    const sl = s.toLowerCase();
+    if (sl.includes('ingenieria electrica') || sl.includes('ingeniera electrica') || sl.match(/^ie\d/))
+        return `Ing. Eléctrica ${num}${mes}${year}`.replace(/\s+/g,' ').trim();
+    if (sl.includes('luminotecnia') || sl.match(/^lu1/))
+        return `Luminotecnia ${num}${year}`.trim();
+    if (sl.includes('aadeca'))
+        return `AADECA ${num}${mes}${year}`.replace(/\s+/g,' ').trim();
+    if (sl.includes('anuario'))
+        return `Anuario${year}`;
+    return s.split(' ').map(w => w.charAt(0).toUpperCase()+w.slice(1).toLowerCase()).join(' ');
+}
+
+// Añadir id y titulo a cada entrada
+CATALOGO.forEach((r, i) => {
+    r.id = i;
+    r.filename = r.path.split('/').pop();
+    r.titulo = titulo(r.filename);
+});
+
+// ── Contadores ────────────────────────────────────────────────────────────
+const counts = { ALL: CATALOGO.length, IE: 0, LU: 0, AA: 0 };
+CATALOGO.forEach(r => counts[r.cat]++);
+Object.keys(counts).forEach(k => {
+    const el = document.getElementById('cnt-' + k);
+    if (el) el.textContent = counts[k];
+});
+
+// ── Estado ────────────────────────────────────────────────────────────────
+let filtroAct = 'ALL';
+let busqueda  = '';
+
+window.setFiltro = function(cat, btn) {
+    filtroAct = cat;
+    document.querySelectorAll('.rv-filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderGrid();
+};
+
+window.filtrar = function() {
+    busqueda = document.getElementById('rvSearch').value.toLowerCase();
+    renderGrid();
+};
+
+// ── Render ────────────────────────────────────────────────────────────────
+const CAT_LABEL = { IE: 'Ing. Eléctrica', LU: 'Luminotecnia', AA: 'AADECA', AN: 'Anuario' };
+
+function lista() {
+    return CATALOGO.filter(r => {
+        const catOk  = filtroAct === 'ALL' || r.cat === filtroAct;
+        const textOk = !busqueda || r.titulo.toLowerCase().includes(busqueda)
+                                 || r.filename.toLowerCase().includes(busqueda);
+        return catOk && textOk;
+    });
+}
+
+function renderGrid() {
+    const items = lista();
+    document.getElementById('rvInfo').textContent = `${items.length} revista${items.length !== 1 ? 's' : ''}`;
+    const grid = document.getElementById('rvGrid');
+
+    if (!items.length) {
+        grid.innerHTML = `<div class="rv-empty"><div class="rv-empty-icon">📭</div><p>Sin resultados para "<strong>${busqueda}</strong>"</p></div>`;
+        return;
+    }
+
+    grid.innerHTML = items.map(r => `
+        <div class="rv-card" data-id="${r.id}" onclick="abrirModal(${r.id})">
+            <div class="rv-thumb" data-path="${r.path}">📄</div>
+            <div class="rv-card-body">
+                <span class="rv-card-cat cat-${r.cat}">${CAT_LABEL[r.cat]}</span>
+                <div class="rv-card-title">${r.titulo}</div>
+                <div class="rv-card-btns">
+                    <button class="rv-btn-read">📖 Leer</button>
+                    <a class="rv-btn-dl" href="${r.path}" download="${r.filename}"
+                       onclick="event.stopPropagation()" title="Descargar">⬇</a>
+                </div>
+            </div>
+        </div>
+    `).join('');
+
+    observarThumbs();
+}
+
+// ── Preview lazy con IntersectionObserver ─────────────────────────────────
+// Carga un iframe con el PDF local escalado para mostrar la portada
+const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+        if (!e.isIntersecting || e.target.dataset.loaded) return;
+        e.target.dataset.loaded = '1';
+        observer.unobserve(e.target);
+
+        const path = e.target.dataset.path;
+        const iframe = document.createElement('iframe');
+        // PDF local: el navegador lo renderiza directamente
+        // #toolbar=0 oculta la barra de herramientas del visor nativo
+        iframe.src = path + '#toolbar=0&navpanes=0&scrollbar=0&view=FitH';
+        iframe.title = 'portada';
+        iframe.setAttribute('loading', 'lazy');
+        e.target.textContent = '';   // quita el ícono de placeholder
+        e.target.appendChild(iframe);
+    });
+}, { rootMargin: '300px' });
+
+function observarThumbs() {
+    document.querySelectorAll('.rv-thumb:not([data-obs])').forEach(th => {
+        th.dataset.obs = '1';
+        observer.observe(th);
+    });
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────
+window.abrirModal = function(id) {
+    const r = CATALOGO.find(x => x.id === id);
+    if (!r) return;
+    document.getElementById('rvModalTitle').textContent = r.titulo;
+    const dl = document.getElementById('rvModalDl');
+    dl.href     = r.path;
+    dl.download = r.filename;
+    // PDF local renderizado en iframe a pantalla completa
+    document.getElementById('rvModalFrame').src = r.path + '#toolbar=1';
+    document.getElementById('rvModal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+};
+
+window.cerrarModal = function(e) {
+    if (e && e.target !== document.getElementById('rvModal')) return;
+    document.getElementById('rvModal').classList.remove('open');
+    document.getElementById('rvModalFrame').src = 'about:blank';
+    document.body.style.overflow = '';
+};
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarModal(); });
+
+// ── Arranque ──────────────────────────────────────────────────────────────
+renderGrid();
+</script>
+</body>
+</html>
