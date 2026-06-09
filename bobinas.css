@@ -266,6 +266,9 @@ details summary { font-size: .77rem; color: var(--primary); cursor: pointer; use
     background: var(--plight);
     border-bottom: 2px solid var(--border);
     margin-bottom: 18px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
 }
 .back-btn {
     display: flex;

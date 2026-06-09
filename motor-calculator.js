@@ -218,7 +218,7 @@ function calcular() {
     const A_cob  = n_cond * A_esm;
     const Ku     = A_cob / A_neta;
 
-    // ── Cálculo de alternativas si Ku > 45% ──────────────────────────────────
+    // ── Cálculo de alternativas si Ku > 55% ──────────────────────────────────
     const capas_factor = (k === 1 ? 2 : 1);
 
     // Opción A: Nc máximo que cabe manteniendo AWG seleccionado, Ku ≤ 45%
@@ -353,7 +353,17 @@ function calcular() {
     // Guardar alternativas en variable global para que aplicarAlt() las use
     window._alternativas = [];
 
-    if (Ku > 0.45) {
+    if (Ku > 0.45 && Ku <= 0.55) {
+        // Rango ajustado: aviso informativo sin alternativas forzadas
+        set('r-alternativas', `
+            <div style="font-size:.8rem;font-weight:600;color:#854d0e;margin-top:6px;
+                        padding:10px 14px;background:#fef9c3;border:1px solid #fde047;
+                        border-radius:8px">
+              ⚠️ Ku entre 45% y 55% — llenado ajustado. El bobinado puede entrar con cuidado, pero conviene revisar las dimensiones de la ranura.
+            </div>`);
+    }
+
+    if (Ku > 0.55) {
         // Opción A: mismo AWG, Nc reducido
         window._alternativas.push({
             letra: 'A',
@@ -366,9 +376,8 @@ function calcular() {
             ],
             Ku: Ku_A,
             viable: Nc_max_ranura >= 1 && Ku_A <= 0.55,
-            // Valores a aplicar
             awg_override: wire.awg,
-            delta_new: null,   // sin cambio
+            delta_new: null,
             Nc_new: Nc_max_ranura,
         });
 
@@ -415,21 +424,20 @@ function calcular() {
             });
         }
 
-        // Selección automática: B (mantiene Nc) > C (combinada) > A (reduce Nc)
-        // Se aplica solo si no hay ya un override manual activo
-        const ya_tiene_override = (usando_override || (!isNaN(nc_ov_early) && nc_ov_early > 0));
-        if (!ya_tiene_override) {
-            const orden_preferencia = ['B', 'C', 'A'];
-            for (const letra of orden_preferencia) {
-                const idx = window._alternativas.findIndex(a => a.letra === letra && a.viable);
-                if (idx >= 0) {
-                    aplicarAlt(idx);
-                    return; // aplicarAlt llama a calcular() — salir para no doble-renderizar
-                }
-            }
+        // Aplicar automáticamente la mejor alternativa viable: B > C > A
+        const orden = ['B', 'C', 'A'];
+        let auto_idx = -1;
+        for (const letra of orden) {
+            const idx = window._alternativas.findIndex(a => a.letra === letra && a.viable);
+            if (idx >= 0) { auto_idx = idx; break; }
         }
 
-        // Renderizar tarjetas de alternativas
+        if (auto_idx >= 0) {
+            aplicarAlt(auto_idx);
+            return; // aplicarAlt llama a calcular() — no seguir renderizando
+        }
+
+        // Si ninguna alternativa es viable, mostrar tarjetas para intervención manual
         const cards = window._alternativas.map((a, i) => {
             const ku_pct  = (a.Ku * 100).toFixed(1);
             const ku_col  = a.Ku <= 0.45 ? '#15803d' : a.Ku <= 0.55 ? '#854d0e' : '#991b1b';
@@ -441,23 +449,18 @@ function calcular() {
             return `
             <div style="background:#fff;border:1px solid #cbd5e1;border-radius:9px;padding:14px 16px;
                         display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
-              <!-- Letra -->
               <div style="width:34px;height:34px;border-radius:50%;background:#1d4ed8;color:#fff;
                           display:flex;align-items:center;justify-content:center;font-weight:800;
                           font-size:1rem;flex-shrink:0">${a.letra}</div>
-              <!-- Contenido -->
               <div style="flex:1;min-width:180px">
                 <div style="font-weight:700;font-size:.87rem;margin-bottom:6px">${a.titulo}</div>
                 <ul style="padding-left:16px;font-size:.78rem;color:#475569;line-height:1.9;margin:0">
                   ${a.desc.map(d=>`<li>${d}</li>`).join('')}
                 </ul>
               </div>
-              <!-- Ku + botón -->
               <div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex-shrink:0">
                 <div style="background:${ku_bg};color:${ku_col};border-radius:7px;padding:6px 14px;
-                            font-size:1.1rem;font-weight:800;text-align:center">
-                  ${ku_pct}%
-                </div>
+                            font-size:1.1rem;font-weight:800;text-align:center">${ku_pct}%</div>
                 <div style="font-size:.72rem;text-align:center">${estado}</div>
                 <button onclick="aplicarAlt(${i})"
                   style="padding:8px 16px;background:#1d4ed8;color:#fff;border:none;
@@ -471,11 +474,10 @@ function calcular() {
 
         set('r-alternativas', `
             <div style="margin-top:4px">
-              <div style="font-size:.8rem;font-weight:700;color:#1e293b;margin-bottom:10px;
-                          padding:10px 14px;background:#fef9c3;border:1px solid #fde047;
+              <div style="font-size:.8rem;font-weight:700;color:#991b1b;margin-bottom:10px;
+                          padding:10px 14px;background:#fee2e2;border:1px solid #fca5a5;
                           border-radius:8px">
-                ⚠️ Ku > 45% — el bobinado no entrará con la configuración actual.
-                Seleccione una alternativa y pulse <b>Aplicar y recalcular</b>.
+                ⚠️ Ku > 55% — el bobinado no entrará. Ninguna alternativa automática es viable. Revise las dimensiones de la ranura.
               </div>
               <div style="display:flex;flex-direction:column;gap:10px">${cards}</div>
             </div>`);
@@ -487,7 +489,9 @@ function calcular() {
                 alerta('warn', `Nc=${Nc_adj} espiras es muy bajo. Verifique: (1) Di y L están en mm ` +
                     `(se convierten a cm internamente), (2) B=5 KGs correcto, (3) V es tensión de línea.`);
         }
-    } else {
+    }
+
+    if (Ku <= 0.45) {
         set('r-alternativas', '');
     }
 
@@ -536,7 +540,8 @@ window.aplicarAlt = function (idx) {
             const titulo = a.titulo;
             const nc_label = (a.Nc_new != null && !titulo.includes('Nc ='))
                 ? `  ·  Nc = ${a.Nc_new} esp/bobina` : '';
-            bannerText.textContent = `↺ Opción ${a.letra} activa: ${titulo}${nc_label}`;
+            const ku_label = a.Ku != null ? `  ·  Ku estimado: ${(a.Ku * 100).toFixed(1)}%` : '';
+            bannerText.textContent = `✅ Opción ${a.letra} aplicada automáticamente: ${titulo}${nc_label}${ku_label}`;
         }
     }
 

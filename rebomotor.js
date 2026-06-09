@@ -219,12 +219,17 @@
         // Bobinas en serie por fase: cada fase tiene Nb/m bobinas distribuidas
         // N_ph = N_c × (bobinas por fase) → N_c = N_ph_raw / (Nb/m)
         const bobinas_por_fase = r.Nb / r.m;
-        r.N_c  = Math.max(1, Math.round(N_ph_raw / bobinas_por_fase));
+        r.N_c  = d._fix_Nc || Math.max(1, Math.round(N_ph_raw / bobinas_por_fase));
         r.N_ph = r.N_c * bobinas_por_fase;
 
         // Verificar Faraday con N_c calculado
         r.V_calc = 4.44 * r.f * r.Phi * r.Kw * r.N_ph;
         r.err_V  = Math.abs(r.V_calc - r.V_fase) / r.V_fase * 100;  // %
+
+        // Error inherente al redondeo de N_c (no evitable con ningún calibre)
+        const N_ph_ideal = N_ph_raw;
+        const V_ideal    = 4.44 * r.f * r.Phi * r.Kw * N_ph_ideal;
+        r.err_V_redondeo = Math.abs(r.V_calc - V_ideal) / r.V_fase * 100;
 
         // ── 10. Calibre de conductor — desde corriente y geometría ──
         // Densidad de corriente J según clase de aislamiento
@@ -261,6 +266,10 @@
         // Último recurso: mejor candidato por corriente ignorando Ku
         if (!r.wire) {
             r.wire = _seleccionarAWG(r.A_cond_req);
+        }
+        // Override de auto-corrección
+        if (d._fix_awg && AWG_TABLE[d._fix_awg]) {
+            r.wire = { awg: d._fix_awg, ...AWG_TABLE[d._fix_awg] };
         }
 
         // ── 11. Factor de llenado real ────────────────────────────
@@ -309,17 +318,74 @@
         // ── 18. RPM sincrónica y deslizamiento típico ──────────────
         r.rpm_nom = d.rpm || r.rpm_sync * 0.967;                      // rpm nominals
 
-        // ── 19. Alertas y diagnóstico ─────────────────────────────
+        // ── 19. Auto-corrección Ku > 55% ─────────────────────────
+        r.auto_fix = null;
+        if (r.Ku_real > 0.55 && !d._fix_applied) {
+            const KU_OBJ = 0.45;
+
+            // Opción A: mismo AWG, reducir N_c hasta que Ku ≤ KU_OBJ
+            const Nc_A = Math.max(1, Math.floor(
+                (r.A_ranura_neta * KU_OBJ) / (r.capas * r.n_paralelo * Math.PI / 4 * r.wire.d_esm * r.wire.d_esm)
+            ));
+            const A_esm_cur = Math.PI / 4 * r.wire.d_esm * r.wire.d_esm;
+            const Ku_A = (r.capas * Nc_A * r.n_paralelo * A_esm_cur) / r.A_ranura_neta;
+
+            // Opción B: calibre más fino, mismo N_c — buscar el primer AWG más fino que logra Ku ≤ KU_OBJ
+            let fix_B = null;
+            const awg_idx = AWG_LIST.indexOf(r.wire.awg);
+            for (let i = awg_idx + 1; i < AWG_LIST.length; i++) {
+                const w = AWG_TABLE[AWG_LIST[i]];
+                const A_esm_b = Math.PI / 4 * w.d_esm * w.d_esm;
+                const Ku_b = (r.capas * r.N_c * r.n_paralelo * A_esm_b) / r.A_ranura_neta;
+                if (Ku_b <= KU_OBJ) { fix_B = { awg: AWG_LIST[i], wire: w, Ku: Ku_b, N_c: r.N_c }; break; }
+            }
+
+            // Opción C: calibre más fino + N_c reducido (combinada)
+            let fix_C = null;
+            if (fix_B) {
+                const A_esm_c = Math.PI / 4 * fix_B.wire.d_esm * fix_B.wire.d_esm;
+                const Nc_C = Math.max(1, Math.floor(
+                    (r.A_ranura_neta * KU_OBJ) / (r.capas * r.n_paralelo * A_esm_c)
+                ));
+                const Ku_C = (r.capas * Nc_C * r.n_paralelo * A_esm_c) / r.A_ranura_neta;
+                fix_C = { awg: fix_B.awg, wire: fix_B.wire, Ku: Ku_C, N_c: Nc_C };
+            }
+
+            // Elegir mejor opción viable: B > C > A
+            const viable = f => f && f.Ku <= 0.55;
+            const elegida = viable(fix_B) ? { ...fix_B, letra:'B', desc:`AWG ${fix_B.awg} (calibre más fino), N_c sin cambio` }
+                          : viable(fix_C) ? { ...fix_C, letra:'C', desc:`AWG ${fix_C.awg} + N_c = ${fix_C.N_c} vueltas` }
+                          : viable({Ku: Ku_A}) ? { awg: r.wire.awg, wire: r.wire, Ku: Ku_A, N_c: Nc_A,
+                                                   letra:'A', desc:`N_c reducido a ${Nc_A} vueltas, mismo AWG ${r.wire.awg}` }
+                          : null;
+
+            if (elegida) {
+                // Recalcular con la alternativa aplicada
+                const d_fix = { ...d, _fix_applied: true,
+                    _fix_awg: elegida.awg, _fix_Nc: elegida.N_c, _fix_desc: elegida.desc, _fix_letra: elegida.letra };
+                return calcular(d_fix);
+            }
+        }
+
+        // Registrar si este resultado viene de una auto-corrección
+        if (d._fix_applied) {
+            r.auto_fix = { letra: d._fix_letra, desc: d._fix_desc, awg: d._fix_awg, N_c: d._fix_Nc };
+        }
+
+        // ── 20. Alertas y diagnóstico ─────────────────────────────
         r.alertas = [];
         if (r.Ku_real > 0.55)
-            r.alertas.push({ t:'warn', m:`Factor de llenado Ku=${(r.Ku_real*100).toFixed(1)}% > 55%. Ranura sobrecargada — reduzca N_c en 1 o use calibre más fino.` });
+            r.alertas.push({ t:'warn', m:`Factor de llenado Ku=${(r.Ku_real*100).toFixed(1)}% > 55%. No se encontró alternativa automática viable. Revise dimensiones de la ranura.` });
+        if (r.Ku_real >= 0.45 && r.Ku_real <= 0.55)
+            r.alertas.push({ t:'info', m:`Factor de llenado Ku=${(r.Ku_real*100).toFixed(1)}% — llenado ajustado, puede entrar con cuidado.` });
         if (r.Ku_real < 0.25)
             r.alertas.push({ t:'info', m:`Factor de llenado Ku=${(r.Ku_real*100).toFixed(1)}% < 25%. Ranura muy subutilizada — puede aumentar N_c o usar calibre más grueso.` });
         if (r.q_frac > 0.01)
             r.alertas.push({ t:'info', m:`Bobinado fraccionario q=${r.q.toFixed(3)}. La distribución de ranuras no es uniforme.` });
         if (r.Kw < 0.85)
             r.alertas.push({ t:'warn', m:`Factor de bobinado Kw=${r.Kw.toFixed(3)} bajo. Verifique Z, P y tipo de bobinado.` });
-        if (r.err_V > 5)
+        // Alertar solo si el error de tensión supera lo inevitable por redondeo de N_c
+        if (r.err_V > 5 && (r.err_V - r.err_V_redondeo) > 2)
             r.alertas.push({ t:'warn', m:`La tensión calculada (${r.V_calc.toFixed(1)} V) difiere ${r.err_V.toFixed(1)}% de la nominal. Revise Bav o N_c.` });
         if (r.pcu_pct > 8)
             r.alertas.push({ t:'warn', m:`Pérdidas en cobre = ${r.pcu_pct.toFixed(1)}% de la potencia nominal. Alto — considere calibre más grueso.` });
@@ -377,9 +443,14 @@
 
         const Ku_color = r.Ku_real > 0.55 ? '#f87171' : r.Ku_real < 0.25 ? '#fbbf24' : '#34d399';
 
-        const alertas_html = r.alertas.length
+        const autofix_html = r.auto_fix
+            ? `<div class="rm-alerta rm-alerta-ok" style="background:#dcfce7;border:1px solid #86efac;color:#14532d;margin-bottom:8px">
+                ✅ Opción ${r.auto_fix.letra} aplicada automáticamente: <b>${r.auto_fix.desc}</b> · Ku = ${(r.Ku_real*100).toFixed(1)}%
+               </div>` : '';
+
+        const alertas_html = autofix_html + (r.alertas.length
             ? r.alertas.map(a => `<div class="rm-alerta rm-alerta-${a.t}">${a.t==='warn'?'⚠️':'ℹ️'} ${a.m}</div>`).join('')
-            : '<div class="rm-alerta rm-ok">✅ Todos los parámetros dentro de rangos normales.</div>';
+            : '<div class="rm-alerta rm-ok">✅ Todos los parámetros dentro de rangos normales.</div>');
 
         el.innerHTML = `
 

@@ -5,12 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bobinados Trifásicos — Calculadora NEMA 50 Hz</title>
 <link rel="stylesheet" href="bobinas.css">
+<style>body { background: var(--bg); padding: 0; }</style>
 </head>
 <body>
-<div class="page">
+<div class="page-header">
+    <a href="index.html" class="back-btn">← Inicio</a>
+    <div>
+        <div class="page-title">⚙️ Cálculo de Bobinados Trifásicos</div>
+        <div class="page-subtitle">Método: "Cálculo de bobinados trifásicos" · NEMA 50 Hz · 2 a 8 Polos</div>
+    </div>
+</div>
 
-<h1>⚙️ Cálculo de Bobinados Trifásicos</h1>
-<p class="subtitle">Método: "Cálculo de bobinados trifásicos" · NEMA 50 Hz · 2 a 8 Polos</p>
+<div class="page">
 
 <!-- ══ 1. SELECTOR NEMA ══ -->
 <div class="card">
@@ -86,7 +92,7 @@
     </div>
     <div class="field">
       <label>Conexión (k₂)</label>
-      <select id="k2">
+      <select id="k2" onchange="actualizarVoltajePorConexion()">
         <option value="1.73" selected>Estrella Y (k₂=1.73)</option>
         <option value="1">Triángulo Δ (k₂=1)</option>
       </select>
@@ -173,7 +179,7 @@
   <div class="card-title">⚡ 3. Parámetros Eléctricos</div>
   <div class="fg4">
     <div class="field">
-      <label>Tensión de red V (V)</label>
+      <label>Tensión de línea V (V)</label>
       <input type="number" id="voltaje" value="220">
     </div>
     <div class="field">
@@ -275,6 +281,34 @@
 </div>
 
 <button class="btn-calc" onclick="calcular()">⚡ Calcular Bobinado</button>
+
+<button onclick="saveGeometria()" title="Guardar Cálculo"
+  id="btn-save-float"
+  style="position:fixed;bottom:28px;right:28px;z-index:999;
+         padding:14px 22px;overflow:hidden;
+         background:linear-gradient(135deg,#16a34a,#22c55e);
+         color:#fff;border:none;border-radius:50px;
+         font-size:.95rem;font-weight:700;letter-spacing:.03em;
+         cursor:pointer;
+         box-shadow:0 0 12px 3px rgba(34,197,94,.6),
+                    0 0 28px 6px rgba(34,197,94,.3),
+                    0 4px 14px rgba(0,0,0,.35);
+         display:flex;flex-direction:column;align-items:center;gap:4px;
+         transition:box-shadow .25s,transform .2s">
+  <span id="btn-save-label" style="display:flex;align-items:center;gap:8px">💾 Guardar Cálculo</span>
+  <div id="btn-save-bar-wrap" style="width:100%;height:4px;background:rgba(255,255,255,.25);border-radius:4px;overflow:hidden;display:none">
+    <div id="btn-save-bar" style="height:100%;width:0%;background:#fff;border-radius:4px;transition:width .05s linear"></div>
+  </div>
+</button>
+<style>
+#btn-save-float:hover {
+  transform: scale(1.07);
+  box-shadow: 0 0 18px 6px rgba(34,197,94,.85),
+              0 0 40px 10px rgba(34,197,94,.45),
+              0 6px 18px rgba(0,0,0,.4);
+}
+#btn-save-float:active { transform: scale(.97); }
+</style>
 
 <!-- ══ RESULTADOS ══ -->
 <div id="resultados" style="margin-top:18px">
@@ -474,6 +508,107 @@ function aplicarDesdePlaca() {
 
     // Scroll suave a sección 3
     document.getElementById('card-placa')?.scrollIntoView({ behavior: 'smooth' });
+}
+
+function saveGeometria() {
+    const g = id => document.getElementById(id);
+    const val = id => g(id)?.value ?? '';
+    const txt = id => g(id)?.textContent?.trim() ?? '';
+
+    const resultados = g('resultados');
+    if (!resultados || resultados.style.display === 'none' || txt('r-Nc') === '—') {
+        alert('Realizá el cálculo primero antes de guardar.');
+        return;
+    }
+
+    const design = {
+        timestamp: new Date().toISOString(),
+        type: 'geometria_estator',
+        data: {
+            polos: val('polos'), ranuras: val('ranuras'),
+            dext: val('dext'), dint: val('dint'), largo: val('largo'),
+            capas: val('capas'), k1: val('k1'), k2: val('k2'),
+            paso: val('paso-sel'),
+            voltaje: val('voltaje'), freq: val('freq'),
+            corriente: val('corriente'), densidad: val('densidad'),
+            b0: val('b0'), b1: val('b1'), h1: val('h1'),
+            papel: val('papel'), cuna: val('cuna')
+        },
+        resultados: {
+            Nc: txt('r-Nc'), Zf: txt('r-Zf'), awg: txt('r-awg'),
+            ltot: txt('r-ltot'), peso: txt('r-peso'), ku: txt('r-ku-pct')
+        }
+    };
+
+    // — Progressbar —
+    const btn   = g('btn-save-float');
+    const label = g('btn-save-label');
+    const wrap  = g('btn-save-bar-wrap');
+    const bar   = g('btn-save-bar');
+
+    btn.disabled = true;
+    btn.style.cursor = 'not-allowed';
+    wrap.style.display = 'block';
+    bar.style.transition = 'none';
+    bar.style.width = '0%';
+
+    let pct = 0;
+    const step = () => {
+        pct += 4;
+        bar.style.transition = 'width .05s linear';
+        bar.style.width = Math.min(pct, 90) + '%'; // tope en 90% hasta confirmar guardado
+        if (pct < 90) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+
+    // Simular async (localStorage es síncrono pero da feedback visual)
+    setTimeout(() => {
+        try {
+            const saved = JSON.parse(localStorage.getItem('inductorDesigns') || '[]');
+            saved.push(design);
+            localStorage.setItem('inductorDesigns', JSON.stringify(saved));
+
+            // Completar la barra al 100%
+            bar.style.transition = 'width .15s ease';
+            bar.style.width = '100%';
+            label.innerHTML = '✅ Guardado';
+
+            setTimeout(() => {
+                bar.style.transition = 'width .3s ease';
+                bar.style.width = '0%';
+                setTimeout(() => {
+                    wrap.style.display = 'none';
+                    label.innerHTML = '💾 Guardar Cálculo';
+                    btn.disabled = false;
+                    btn.style.cursor = 'pointer';
+                }, 350);
+            }, 700);
+
+        } catch (e) {
+            bar.style.background = '#ef4444';
+            bar.style.width = '100%';
+            label.innerHTML = '❌ Error al guardar';
+            setTimeout(() => {
+                wrap.style.display = 'none';
+                bar.style.background = '#fff';
+                label.innerHTML = '💾 Guardar Cálculo';
+                btn.disabled = false;
+                btn.style.cursor = 'pointer';
+            }, 1500);
+        }
+    }, 600);
+}
+
+function actualizarVoltajePorConexion() {
+    const k2 = document.getElementById('k2')?.value;
+    // "Tensión de línea (V)" en Datos de Placa
+    const plV = document.getElementById('pl-v');
+    // "Tensión de red V (V)" en Parámetros Eléctricos
+    const vEl = document.getElementById('voltaje');
+    // Y → 220 V, Δ → 380 V
+    const v = k2 === '1.73' ? 220 : 380;
+    if (plV) { plV.value = v; calcularDesdePlaca(); }
+    if (vEl) vEl.value = v;
 }
 
 // Inicializar
